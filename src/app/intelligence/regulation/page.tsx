@@ -1,1 +1,1 @@
-import{SectionPage}from"@/components/intelligence/section-page";export default function Page(){return <SectionPage eyebrow="REGULATORY RADAR" title="Regulation" description="Verified proposals, consultations and final rules with dates, affected firms and required responses."/>}
+import{PublishedSection}from"@/components/intelligence/published-section";export const dynamic="force-dynamic";export default function Page(){return <PublishedSection view="regulation"/>}
