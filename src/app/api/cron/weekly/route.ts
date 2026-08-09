@@ -1,5 +1,5 @@
 import { start } from "workflow/api";
-import { isDublinThursdayEight } from "@/lib/research/reporting-period";
+import { isDublinEight } from "@/lib/research/reporting-period";
 import {
   attachWorkflowRun,
   prepareWeeklyReport,
@@ -14,10 +14,10 @@ export async function GET(request: Request) {
   ) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isDublinThursdayEight()) {
+  if (!isDublinEight()) {
     return Response.json({
       skipped: true,
-      reason: "Outside Europe/Dublin schedule window",
+      reason: "Outside the 08:00 Europe/Dublin schedule window",
     });
   }
 
