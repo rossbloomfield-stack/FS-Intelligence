@@ -1,1 +1,1 @@
-import{SectionPage}from"@/components/intelligence/section-page";export default function Page(){return <SectionPage eyebrow="INTEGRATED GROUP" title="Strategic Actions" description="Prioritised defend, accelerate, explore, reconsider and prepare actions grounded in current evidence."/>}
+import{PublishedSection}from"@/components/intelligence/published-section";export const dynamic="force-dynamic";export default function Page(){return <PublishedSection view="actions"/>}
