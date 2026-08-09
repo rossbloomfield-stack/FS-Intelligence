@@ -11,7 +11,7 @@ const nav = [
   ["Customer Signals", "/intelligence/customers"],
   ["Strategic Actions", "/intelligence/actions"],
   ["Sources", "/intelligence/sources"],
-  ["Archive", "/intelligence/reports"],
+  ["Archive", "/intelligence/archive"],
   ["Admin", "/intelligence/admin"],
 ];
 
