@@ -1,0 +1,4 @@
+import type { Metadata } from "next";
+import { SectionPage } from "@/components/intelligence/section-page";
+export const metadata:Metadata={title:"About Ross Bloomfield | Financial Services Transformation Intelligence",description:"About the independent analysis behind Financial Services Transformation Intelligence.",alternates:{canonical:"/intelligence/about"}};
+export default function Page(){return <SectionPage eyebrow="ABOUT" title="Ross Bloomfield" description="Digital, strategy and transformation leader working across financial services, customer experience, AI and digital business models."><div className="max-w-3xl rounded-2xl border border-[var(--line)] bg-white p-6"><p className="leading-7 text-[var(--muted)]">Financial Services Transformation Intelligence was created to separate consequential change from the volume of industry news and translate it into the questions and decisions senior leaders should be considering.</p></div></SectionPage>}

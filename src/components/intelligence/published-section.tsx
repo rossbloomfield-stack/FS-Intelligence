@@ -17,9 +17,7 @@ const copy: Record<View, { eyebrow: string; title: string; description: string }
 };
 
 async function latestReport() {
-  const supabase = await createClient();
-  const { data } = await supabase.from("reports").select("slug,title,executive_headline,overall_assessment,published_at").eq("is_published", true).order("published_at", { ascending: false }).limit(1).maybeSingle();
-  return data;
+  try { const supabase = await createClient(); const { data } = await supabase.from("reports").select("slug,title,executive_headline,overall_assessment,published_at").eq("is_published", true).order("published_at", { ascending: false }).limit(1).maybeSingle(); return data; } catch { return null; }
 }
 
 function FindingCard({ item, index }: { item: MarketFinding; index: number }) {
