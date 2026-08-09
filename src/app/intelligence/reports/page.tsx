@@ -51,8 +51,8 @@ function fallbackHighlights(): Highlight[] {
 }
 
 export default async function Page() {
-  const db = await createClient();
-  const { data: report } = await db.from("reports").select("slug,title,executive_headline,overall_assessment,content,published_at").eq("is_published",true).order("published_at",{ascending:false}).limit(1).maybeSingle();
+  let report:{slug:string;title:string;executive_headline:string;overall_assessment:string;content:unknown;published_at:string|null}|null=null;
+  try{const db=await createClient();const result=await db.from("reports").select("slug,title,executive_headline,overall_assessment,content,published_at").eq("is_published",true).order("published_at",{ascending:false}).limit(1).maybeSingle();report=result.data}catch{/* Render the reviewed fallback when public database configuration is unavailable. */}
   const parsed = baselineSchema.safeParse(report?.content);
   const highlights: Highlight[] = parsed.success ? parsed.data.developments.map(item => {
     const text = `${item.title} ${item.assessment} ${item.irishReadAcross}`;
