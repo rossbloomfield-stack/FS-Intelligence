@@ -1,1 +1,1 @@
-import{SectionPage}from"@/components/intelligence/section-page";export default function Page(){return <SectionPage eyebrow="EVIDENCE LIBRARY" title="Sources" description="Bibliographic metadata, claim linkage and evidence classifications. Full copyrighted articles are never stored."/>}
+import{PublishedSection}from"@/components/intelligence/published-section";export const dynamic="force-dynamic";export default function Page(){return <PublishedSection view="sources"/>}
