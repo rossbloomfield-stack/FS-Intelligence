@@ -1,0 +1,9 @@
+sed: --: No such file or directory
+packages:
+  - .
+allowBuilds:
+  "@swc/core": true
+  "@tailwindcss/oxide": true
+  cbor-extract: true
+  esbuild: true
+  unrs-resolver: true

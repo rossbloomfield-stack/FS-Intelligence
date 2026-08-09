@@ -1,0 +1,13 @@
+sed: --: No such file or directory
+.next/
+node_modules/
+.env
+.env.local
+.env.*.local
+coverage/
+*.tsbuildinfo
+.workflow/
+src/app/.well-known/workflow/
+evals/results/*
+!evals/results/.gitignore
+/.swc

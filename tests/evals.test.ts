@@ -1,0 +1,2 @@
+sed: --: No such file or directory
+import{describe,expect,it}from"vitest";import{readFileSync}from"node:fs";describe("eval contract",()=>{const cases=readFileSync("evals/cases.jsonl","utf8").trim().split("\n").map(line=>JSON.parse(line)as{id:string;expected:object});it("contains the ten required regression cases",()=>expect(cases).toHaveLength(10));it("uses unique case ids",()=>expect(new Set(cases.map(item=>item.id)).size).toBe(10));});

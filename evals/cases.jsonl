@@ -1,0 +1,11 @@
+sed: --: No such file or directory
+{"id":"old-event-new-article","expected":{"include":false,"qaBlocksIfPresentedAsNew":true}}
+{"id":"announced-not-completed","expected":{"status":"announced","qaBlocksCompletedWording":true}}
+{"id":"company-claim-only","expected":{"evidence":"company_claim_only"}}
+{"id":"consultation-not-final","expected":{"status":"consultation"}}
+{"id":"duplicate-primary-and-reuters","expected":{"deduplicated":true}}
+{"id":"vendor-marketing-no-impact","expected":{"include":false}}
+{"id":"international-no-irish-relevance","expected":{"include":false}}
+{"id":"critical-irish-event","expected":{"classification":"critical"}}
+{"id":"ai-pilot-no-benefit","expected":{"maturity":"pilot","benefit":"no_evidence_disclosed"}}
+{"id":"ai-production-measured-benefit","expected":{"maturity":"live","include":true}}
