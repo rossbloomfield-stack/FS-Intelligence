@@ -4,9 +4,11 @@ import { Bell, ChevronDown, Search } from "lucide-react";
 const nav = [
   ["Overview", "/intelligence"],
   ["This Week", "/intelligence/reports"],
+  ["Signals & Indicators", "/intelligence/signals"],
   ["Competitors", "/intelligence/competitors"],
   ["AI & Transformation", "/intelligence/ai"],
   ["Regulation", "/intelligence/regulation"],
+  ["Customer Signals", "/intelligence/customers"],
   ["Strategic Actions", "/intelligence/actions"],
   ["Sources", "/intelligence/sources"],
   ["Archive", "/intelligence/reports"],

@@ -5,3 +5,15 @@ body { margin:0; background:var(--paper); color:var(--ink); font-family:Arial,He
 a { color:inherit; text-decoration:none; }
 button,input,select { font:inherit; }
 .focusable:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible { outline:3px solid #f59a5b; outline-offset:3px; }
+.label { font-size:.68rem; font-weight:800; letter-spacing:.14em; }
+.report-context { margin-bottom:1.5rem; display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:1rem; border-radius:1rem; background:var(--purple-dark); padding:1.5rem; }
+.finding-card { border:1px solid var(--line); border-radius:1rem; background:#fff; padding:1.25rem; }
+.finding-number { display:grid; width:2.5rem; height:2.5rem; place-items:center; border-radius:999px; background:var(--purple); color:#fff; font-size:.75rem; font-weight:800; }
+.signal-pill { display:inline-flex; border-radius:999px; background:#f1eef3; padding:.3rem .65rem; color:var(--muted); font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.signal-hard { background:#e7f5ee; color:var(--green); }
+.signal-soft { background:#fff1e8; color:#a3470e; }
+.source-link { margin-top:1rem; display:inline-flex; align-items:center; gap:.25rem; color:var(--purple); font-size:.78rem; font-weight:700; text-decoration:underline; text-underline-offset:3px; }
+.competitor-table { width:100%; border-collapse:collapse; font-size:.82rem; line-height:1.45; }
+.competitor-table th { background:#f4f0f6; padding:.85rem 1rem; text-align:left; color:var(--purple); font-size:.67rem; letter-spacing:.09em; text-transform:uppercase; }
+.competitor-table td { border-top:1px solid var(--line); padding:1rem; vertical-align:top; }
+.competitor-table tbody tr:hover { background:#fbfafc; }
