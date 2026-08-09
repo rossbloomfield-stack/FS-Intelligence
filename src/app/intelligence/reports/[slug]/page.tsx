@@ -1,2 +1,1 @@
-sed: --: No such file or directory
 import {Dashboard}from"@/components/intelligence/dashboard";import{SectionPage}from"@/components/intelligence/section-page";import{fixtureMode}from"@/config/env";export default async function Page({params}:{params:Promise<{slug:string}>}){const{slug}=await params;return fixtureMode?<Dashboard/>:<SectionPage eyebrow="REPORT" title="Report unavailable" description={`No approved report exists at ${slug}.`}/>}

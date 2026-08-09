@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 -- Cover every foreign key to keep deletes, joins and lineage lookups predictable.
 do $$
 declare r record; index_name text;

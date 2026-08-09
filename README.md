@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 # Financial Services Transformation Intelligence
 
 Board-level, evidence-led market intelligence for Irish financial services. The application runs a durable, typed research workflow, persists evidence and report history in Supabase, and publishes only after QA and administrator approval.

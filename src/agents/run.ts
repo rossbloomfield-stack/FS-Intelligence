@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 import "server-only";
 import { run } from "@openai/agents";
 import { discoveryAgent,materialityAgent,qaAgent,synthesisAgent,verificationAgent } from "./factory";

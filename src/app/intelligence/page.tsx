@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 import { Dashboard } from "@/components/intelligence/dashboard";
 import{SectionPage}from"@/components/intelligence/section-page";import{fixtureMode}from"@/config/env";
 export const dynamic="force-dynamic";

@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 import {createHook,FatalError}from"workflow";
 import{discover,persistEvidence,publish,qualityCheck,score,setStatus,synthesise,verify}from"@/workflows/report-steps";
 import type{ReportWorkflowInput}from"@/schemas/workflow";

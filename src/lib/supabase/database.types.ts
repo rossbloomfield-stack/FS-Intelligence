@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 export type Json =
   | string
   | number

@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 import Link from "next/link";
 import { Bell, ChevronDown, Search } from "lucide-react";
 const nav = [["Overview","/intelligence"],["This Week","/intelligence/reports/2026-08-06"],["Competitors","/intelligence/competitors"],["AI & Transformation","/intelligence/ai"],["Regulation","/intelligence/regulation"],["Strategic Actions","/intelligence/actions"],["Sources","/intelligence/sources"],["Archive","/intelligence/reports"],["Admin","/intelligence/admin"]];

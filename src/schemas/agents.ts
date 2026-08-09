@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 import { z } from "zod";
 
 export const sourceRecordSchema=z.object({url:z.url(),canonicalUrl:z.url(),title:z.string(),publisher:z.string(),sourceType:z.string(),publicationDate:z.string().nullable(),primarySource:z.boolean(),credibilityTier:z.number().int().min(1).max(8),notes:z.string().nullable()});

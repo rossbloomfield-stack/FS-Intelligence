@@ -1,3 +1,2 @@
-sed: --: No such file or directory
 import{resumeHook}from"workflow/api";import{z}from"zod";import{createClient}from"@/lib/supabase/server";
 const schema=z.object({approved:z.boolean()});export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){const db=await createClient();const{data:{user}}=await db.auth.getUser();if(!user||user.app_metadata.role!=="admin")return Response.json({error:"Forbidden"},{status:403});const input=schema.safeParse(await request.json());if(!input.success)return Response.json({error:"Invalid approval"},{status:400});const{id}=await params;await resumeHook(`report-approval:${id}`,input.data);return Response.json({resumed:true});}

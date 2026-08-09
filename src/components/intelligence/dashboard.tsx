@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 import Link from "next/link";
 import { ArrowRight, ChevronRight, CircleAlert, ShieldCheck, TrendingUp } from "lucide-react";
 import { fixtureReport as report } from "@/lib/fixtures/report";

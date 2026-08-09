@@ -1,4 +1,3 @@
-sed: --: No such file or directory
 import type { NextConfig } from "next";
 import { withWorkflow } from "workflow/next";
 
