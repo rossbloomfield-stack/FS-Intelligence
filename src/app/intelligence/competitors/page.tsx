@@ -1,1 +1,1 @@
-import{SectionPage}from"@/components/intelligence/section-page";export default function Page(){return <SectionPage eyebrow="MARKET ACTIVITY" title="Competitors" description="Irish-first competitor moves with filters for sector, theme, maturity and evidence."/>}
+import{PublishedSection}from"@/components/intelligence/published-section";export const dynamic="force-dynamic";export default function Page(){return <PublishedSection view="competitors"/>}
