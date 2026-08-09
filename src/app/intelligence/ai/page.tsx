@@ -1,1 +1,1 @@
-import{SectionPage}from"@/components/intelligence/section-page";export default function Page(){return <SectionPage eyebrow="CAPABILITY TRACKER" title="AI & Transformation" description="Track initiatives from announcement and pilot through production, scale and realised benefit."/>}
+import{PublishedSection}from"@/components/intelligence/published-section";export const dynamic="force-dynamic";export default function Page(){return <PublishedSection view="ai"/>}
