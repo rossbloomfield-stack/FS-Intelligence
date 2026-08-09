@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const prepared = await prepareWeeklyReport();
+  const prepared = await prepareWeeklyReport({ autoPublish: true });
   if (prepared.duplicate) {
     return Response.json({ duplicate: true, reportRunId: null });
   }
