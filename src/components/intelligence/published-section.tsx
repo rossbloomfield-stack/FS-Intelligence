@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Gauge, Radar, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Clock3, Gauge, Radar, Scale, ShieldAlert, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { competitorFocus, findings, reportMeta, type MarketFinding } from "@/lib/market-report";
 import { SectionPage } from "./section-page";
@@ -51,6 +51,35 @@ function Competitors() {
   </>;
 }
 
+const regulatoryMetadata = [
+  { title:"Operational resilience has entered the evidence phase", relevance:96, urgency:94, horizon:"Immediate", status:"In force · supervisory evidence", affected:"All regulated financial firms", response:"Validate important-business-service tolerances, third-party dependencies and board evidence." },
+  { title:"Consumer protection is becoming an outcomes discipline", relevance:92, urgency:86, horizon:"Within three months", status:"Implementation · outcomes focus", affected:"Retail banks, insurers, investment and advice firms", response:"Prove fair value, understanding and support outcomes by product, segment and channel." },
+  { title:"AI accountability will extend into model supply chains", relevance:86, urgency:72, horizon:"Within 12 months", status:"Emerging · prepare", affected:"Firms deploying or procuring automated decision systems", response:"Build one accountable inventory connecting models, vendors, data, decisions and redress." },
+] as const;
+
+function RegulationRadar() {
+  const trends = regulatoryMetadata.map(meta => {
+    const finding = findings.regulation.find(item => item.title === meta.title)!;
+    return { ...meta, finding, priority:Math.round((meta.relevance * .6) + (meta.urgency * .4)) };
+  }).sort((a,b) => b.priority-a.priority);
+  return <>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Metric value={String(trends.length)} label="material regulatory trends" icon={<Scale size={18}/>}/>
+      <Metric value={String(trends.filter(item => item.urgency >= 85).length)} label="urgent executive responses" icon={<Clock3 size={18}/>}/>
+      <Metric value={`${trends[0].priority}/100`} label="highest combined priority" icon={<ShieldAlert size={18}/>}/>
+      <Metric value="100%" label="linked to official evidence" icon={<ShieldCheck size={18}/>}/>
+    </div>
+    <div className="mt-6 space-y-4">{trends.map((item,index) => <article className={`regulatory-trend ${index===0 ? "regulatory-trend-primary" : ""}`} key={item.title}>
+      <div className="regulatory-priority"><span>PRIORITY</span><strong>{item.priority}</strong><small>combined score</small></div>
+      <div><div className="flex flex-wrap items-center gap-2"><span className="theme-pill">{item.finding.direction}</span><span className="signal-pill signal-hard">{item.status}</span><span className="signal-pill">{item.horizon}</span></div><h2 className="mt-3 text-xl font-semibold leading-snug">{item.title}</h2><p className="mt-3 text-sm leading-6 text-[var(--muted)]">{item.finding.interpretation}</p><p className="mt-3 text-xs text-[var(--muted)]"><strong className="text-[var(--ink)]">Affected:</strong> {item.affected}</p></div>
+      <div><div className="grid grid-cols-2 gap-3"><ScoreGauge label="Relevance" score={item.relevance}/><ScoreGauge label="Urgency" score={item.urgency}/></div><div className="mt-3 rounded-xl bg-[var(--paper)] p-4"><p className="label text-[var(--orange)]">REQUIRED RESPONSE</p><p className="mt-2 text-sm leading-6">{item.response}</p><Link className="source-link" href={item.finding.sourceUrl} target="_blank" rel="noreferrer">{item.finding.sourceLabel}<ArrowUpRight size={14}/></Link></div></div>
+    </article>)}</div>
+    <p className="mt-4 text-xs leading-5 text-[var(--muted)]">Combined priority = 60% strategic relevance + 40% urgency. Relevance reflects likely customer, operating-model, commercial and board-accountability impact in Ireland. Urgency reflects regulatory maturity and the practical lead time required to respond. Scores support prioritisation; they do not replace legal interpretation.</p>
+  </>;
+}
+
+function ScoreGauge({label,score}:{label:string;score:number}) { return <div className="score-gauge"><div className="flex items-center justify-between"><span>{label}</span><strong>{score}</strong></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-[var(--purple)]" style={{width:`${score}%`}}/></div></div>; }
+
 function Metric({ value, label, icon }: { value: string; label: string; icon: React.ReactNode }) { return <div className="rounded-xl border border-[var(--line)] bg-white p-4"><div className="flex items-center justify-between"><strong className="text-2xl">{value}</strong><span className="text-[var(--orange)]">{icon}</span></div><p className="mt-1 text-xs text-[var(--muted)]">{label}</p></div>; }
 
 export async function PublishedSection({ view }: { view: View }) {
@@ -62,7 +91,7 @@ export async function PublishedSection({ view }: { view: View }) {
 
   return <SectionPage {...page}>
     <div className="report-context"><div><p className="label text-purple-200">LATEST PUBLISHED ASSESSMENT</p><p className="mt-2 max-w-4xl text-lg font-semibold text-white">{report?.executive_headline ?? reportMeta.headline}</p></div><div className="text-sm text-purple-100">{reportMeta.period}</div></div>
-    {view === "competitors" ? <Competitors/> : view === "sources" ? <div className="mt-6 grid gap-4 md:grid-cols-2">{uniqueSources.map(item => <article className="rounded-xl border border-[var(--line)] p-5" key={item.sourceUrl}><p className="label">PRIMARY / OFFICIAL EVIDENCE</p><h2 className="mt-2 font-semibold">{item.sourceLabel}</h2><p className="mt-2 text-sm leading-6 text-[var(--muted)]">Supports: {item.title}</p><Link className="source-link" href={item.sourceUrl} target="_blank" rel="noreferrer">Open source<ArrowUpRight size={14}/></Link></article>)}</div> : <div className="mt-6 space-y-4">{sectionFindings.map((item, index) => <FindingCard key={`${view}-${item.title}`} item={item} index={index}/>)}</div>}
+    {view === "competitors" ? <Competitors/> : view === "regulation" ? <RegulationRadar/> : view === "sources" ? <div className="mt-6 grid gap-4 md:grid-cols-2">{uniqueSources.map(item => <article className="rounded-xl border border-[var(--line)] p-5" key={item.sourceUrl}><p className="label">PRIMARY / OFFICIAL EVIDENCE</p><h2 className="mt-2 font-semibold">{item.sourceLabel}</h2><p className="mt-2 text-sm leading-6 text-[var(--muted)]">Supports: {item.title}</p><Link className="source-link" href={item.sourceUrl} target="_blank" rel="noreferrer">Open source<ArrowUpRight size={14}/></Link></article>)}</div> : <div className="mt-6 space-y-4">{sectionFindings.map((item, index) => <FindingCard key={`${view}-${item.title}`} item={item} index={index}/>)}</div>}
     <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-5"><p className="mr-auto max-w-3xl text-sm text-[var(--muted)]">{report?.overall_assessment ?? reportMeta.assessment}</p>{report && <Link className="rounded-lg bg-[var(--purple)] px-4 py-2 text-sm font-semibold text-white" href={`/intelligence/reports/${report.slug}`}>Open full report</Link>}</div>
   </SectionPage>;
 }
