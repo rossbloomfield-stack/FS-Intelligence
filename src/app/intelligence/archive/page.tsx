@@ -1,0 +1,5 @@
+import Link from "next/link";
+import { SectionPage } from "@/components/intelligence/section-page";
+import { createClient } from "@/lib/supabase/server";
+export const dynamic="force-dynamic";
+export default async function Page(){const db=await createClient();const{data:reports}=await db.from("reports").select("slug,title,executive_headline,published_at").eq("is_published",true).order("published_at",{ascending:false});return <SectionPage eyebrow="ARCHIVE" title="Published reports" description="Permanent, comparable intelligence reports from previous reporting periods."><div className="space-y-4">{reports?.map(report=><Link className="flex items-center justify-between rounded-xl border border-[var(--line)] bg-white p-5" href={`/intelligence/reports/${report.slug}`} key={report.slug}><span><strong>{report.title}</strong><span className="mt-1 block text-sm text-[var(--muted)]">{report.executive_headline}</span></span><span className="ml-4 text-sm font-semibold text-[var(--purple)]">Open report</span></Link>)}{!reports?.length&&<p className="text-sm text-[var(--muted)]">No approved reports have been published.</p>}</div></SectionPage>}
