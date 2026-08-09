@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ReportWorkflowInput } from "@/schemas/workflow";
 import { previousSevenCompleteDays } from "./reporting-period";
 
-type StartOptions = { rerun?: boolean; now?: Date };
+type StartOptions = { rerun?: boolean; now?: Date; autoPublish?: boolean };
 
 export async function prepareWeeklyReport(options: StartOptions = {}) {
   const period = previousSevenCompleteDays(options.now);
@@ -49,7 +49,8 @@ export async function prepareWeeklyReport(options: StartOptions = {}) {
     researchModel: process.env.OPENAI_RESEARCH_MODEL ?? "gpt-5.6-terra",
     analysisModel: process.env.OPENAI_ANALYSIS_MODEL ?? "gpt-5.6-sol",
     synthesisModel: process.env.OPENAI_SYNTHESIS_MODEL ?? "gpt-5.6-sol",
-    autoPublish: process.env.AUTO_PUBLISH_REPORTS === "true",
+    autoPublish:
+      options.autoPublish ?? process.env.AUTO_PUBLISH_REPORTS === "true",
   };
 
   return { duplicate: false as const, reportRunId: row.id, input };
@@ -62,4 +63,3 @@ export async function attachWorkflowRun(reportRunId: string, workflowRunId: stri
     .eq("id", reportRunId)
     .throwOnError();
 }
-
