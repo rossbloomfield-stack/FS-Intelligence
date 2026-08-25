@@ -3,10 +3,11 @@ import { assessFreshness,type FreshnessAssessment } from "@/lib/intelligence/fre
 import type { IntelligenceQueryPlan } from "@/lib/intelligence/query-planner";
 
 export type IntelligenceSourceRow={id:string;title:string|null;publisher:string|null;url:string|null;publication_date:string|null;source_type:string|null;primary_source:boolean|null;credibility_tier:number|null;evidence_classification:string|null;notes:string|null};
-export type RetrievalResult={references:EvidenceReference[];evidence:EvidencePackage;freshnessAssessment:FreshnessAssessment;gaps:string[]};
+export type DomainAvailability=Record<string,number>;
+export type RetrievalResult={references:EvidenceReference[];evidence:EvidencePackage;freshnessAssessment:FreshnessAssessment;domainAvailability:DomainAvailability;gaps:string[]};
 
 const stopWords=new Set(["about","after","before","could","does","doing","from","have","into","irish","most","should","that","their","the","this","what","which","with","would","your"]);
-export function retrieveFinancialIntelligence(question:string,plan:IntelligenceQueryPlan,rows:IntelligenceSourceRow[],now=new Date()):RetrievalResult{
+export function retrieveFinancialIntelligence(question:string,plan:IntelligenceQueryPlan,rows:IntelligenceSourceRow[],now=new Date(),domainAvailability:DomainAvailability={}):RetrievalResult{
   const terms=tokenise(question);
   const organisations=plan.organisations.flatMap(item=>[item.name,item.slug.replaceAll("-"," ")]).map(value=>value.toLocaleLowerCase("en-IE"));
   const ranked=rows.map(row=>({row,score:scoreRow(row,terms,organisations,plan)})).filter(item=>item.score>0).sort((a,b)=>b.score-a.score||dateValue(b.row.publication_date)-dateValue(a.row.publication_date)).slice(0,10).map(({row},index)=>toReference(row,index));
@@ -16,9 +17,10 @@ export function retrieveFinancialIntelligence(question:string,plan:IntelligenceQ
   const gaps:string[]=[];
   if(!references.length)gaps.push("No approved source directly matched the question.");
   if(plan.organisations.length&&!references.some(ref=>organisations.some(name=>referenceHaystack(ref).includes(name))))gaps.push("No organisation-specific evidence matched the resolved company.");
-  if(plan.evidenceNeeds.some(item=>["financial_metrics","products","digital_capabilities","ai_initiatives","ownership_events"].includes(item)))gaps.push("One or more requested structured knowledge domains are not populated in the current corpus.");
+  const unavailable=plan.evidenceNeeds.filter(item=>item in domainAvailability&&domainAvailability[item]===0);
+  if(unavailable.length)gaps.push(`Structured evidence is not populated for: ${unavailable.join(", ")}.`);
   if(freshnessAssessment.requiresFreshResearch)gaps.push(freshnessAssessment.reason);
-  return {references,evidence,freshnessAssessment,gaps:[...new Set(gaps)]};
+  return {references,evidence,freshnessAssessment,domainAvailability,gaps:[...new Set(gaps)]};
 }
 
 function scoreRow(row:IntelligenceSourceRow,terms:string[],organisations:string[],plan:IntelligenceQueryPlan){

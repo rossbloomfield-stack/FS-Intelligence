@@ -38,9 +38,9 @@ describe("R3 query planning",()=>{
 describe("R3 hybrid retrieval gate",()=>{
  it("returns company-specific evidence instead of every approved source",()=>{
   const plan=planIntelligenceQuery("What is AIB's financial performance?",resolveOrganisations("What is AIB's financial performance?",organisations));
-  const result=retrieveFinancialIntelligence("What is AIB's financial performance?",plan,sources,new Date("2026-04-01"));
+  const result=retrieveFinancialIntelligence("What is AIB's financial performance?",plan,sources,new Date("2026-04-01"),{financial_metrics:0,company_results:1});
   expect(result.references.map(item=>item.sourceId)).toEqual(["aib-source"]);
-  expect(result.gaps).toContain("One or more requested structured knowledge domains are not populated in the current corpus.");
+  expect(result.gaps).toContain("Structured evidence is not populated for: financial_metrics.");
  });
  it("fails closed when no source directly matches",()=>{
   const plan=planIntelligenceQuery("How is Zurich differentiating in health insurance?",[]);
