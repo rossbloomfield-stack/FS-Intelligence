@@ -6,13 +6,17 @@
 
 The client uses the installed Vercel AI SDK transport and `useChat` contract. The server returns an AI SDK UI-message stream. In R1, retrieval checks the count of approved source records before any synthesis. With the current empty corpus it streams an explicit insufficient-evidence response and does not call a model.
 
-## Target query flow
+## R3 retrieval architecture
 
 Question → intent/entities/timeframe → relational and full-text retrieval → optional semantic retrieval → freshness decision → evidence reranking → one synthesis call → deterministic citation QA → streamed answer and evidence.
 
+R3 implements the deterministic front half of this flow. `query-planner.ts` classifies the supported intent, timeframe and evidence needs. `entity-resolver.ts` resolves canonical organisations and approved aliases without treating ownership as identity. `retriever.ts` combines entity, taxonomy, keyword, authority and freshness signals so the evidence panel no longer receives every approved source. `freshness.ts` forces current verification for regulatory and explicitly current questions.
+
+The current corpus remains intentionally fail-closed: retrieval results and gaps are persisted, but substantive model synthesis is disabled until the structured domains contain enough evidence and citation QA can validate generated claims.
+
 ## Persistence
 
-Existing `conversations`, `conversation_messages`, `conversation_entities`, `conversation_references` and `conversation_feedback` tables remain the persistence foundation. RLS scopes rows to `auth.uid()`. R2 will add claim-level lineage and complete history hydration.
+Existing `conversations`, `conversation_messages`, `conversation_entities`, `conversation_references` and `conversation_feedback` tables remain the persistence foundation. RLS scopes rows to `auth.uid()`. R2 added claim-level lineage. R3 persists the query plan, freshness assessment and gaps in conversation context, the classified intent on the user message, resolved organisations in `conversation_entities`, and ranked evidence snapshots in `conversation_references`.
 
 ## Evidence contract
 
@@ -28,4 +32,4 @@ Launch requires at least 5,000 quality-assured references; 15,000 is preferred. 
 
 ## Evaluation
 
-R1 tests access allowlisting and empty-corpus behavior. Later releases add 200 cross-intent questions and approximately 30 golden questions covering entity resolution, time validity, primary-source preference, citation validity, unsupported figures, insufficient evidence, follow-up context, freshness and regulatory disclaimers.
+R1 tests access allowlisting and empty-corpus behavior. R2 tests evidence ranking and citation safety. R3 tests alias resolution, multi-company planning, structured evidence needs, relevance filtering, freshness escalation and insufficient-evidence behaviour. Later releases expand this into 200 cross-intent questions and approximately 30 golden questions covering time validity, primary-source preference, citation validity, unsupported figures, follow-up context and regulatory disclaimers.
