@@ -14,6 +14,12 @@ R3 implements the deterministic front half of this flow. `query-planner.ts` clas
 
 The current corpus remains intentionally fail-closed: retrieval results and gaps are persisted, but substantive model synthesis is disabled until the structured domains contain enough evidence and citation QA can validate generated claims.
 
+## R4 structured answer architecture
+
+R4 adds deterministic UI payloads alongside the text and evidence stream. Company questions can return evidence-linked company cards; multi-company questions return a comparison table; historical and ownership questions return a dated timeline; product questions return product cards only when verified product records exist. Unsupported cells display `Insufficient evidence` rather than inferred maturity or invented comparisons.
+
+The server assembles these payloads from canonical organisations, `digital_benchmarks`, `ai_initiatives`, `competitor_updates` and dated candidate events. The payload is persisted as part of the assistant UI message, so reopening a conversation can reproduce the structured answer without regeneration. Product screenshots and thumbnails remain gated because the production schema does not yet contain a verified product/page benchmark record with an approved image reference.
+
 ## Persistence
 
 Existing `conversations`, `conversation_messages`, `conversation_entities`, `conversation_references` and `conversation_feedback` tables remain the persistence foundation. RLS scopes rows to `auth.uid()`. R2 added claim-level lineage. R3 persists the query plan, freshness assessment and gaps in conversation context, the classified intent on the user message, resolved organisations in `conversation_entities`, and ranked evidence snapshots in `conversation_references`.
