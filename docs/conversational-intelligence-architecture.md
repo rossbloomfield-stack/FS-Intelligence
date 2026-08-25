@@ -36,6 +36,12 @@ Planning and database retrieval are deterministic. A mature, well-covered questi
 
 Launch requires at least 5,000 quality-assured references; 15,000 is preferred. Ingestion proceeds by regulated source, company strategy/results, competitor product and digital pages, products/distribution, AI/technology, customer signals, ownership/M&A and historical analysis. Each batch must pass canonicalisation, deduplication, metadata, accessibility and evidence-quality checks.
 
+## R5 domain model and ingestion
+
+R5 adds versioned company strategy profiles, source-linked financial time series, product propositions, atomic digital capabilities and approved product-page benchmarks. Existing customer signals gain explicit survey and evidence dates. Each domain row is withheld from authenticated retrieval until human approval, and the database retains its source foreign key or claim-level join.
+
+Corpus additions use the versioned Zod contract in `src/schemas/intelligence-corpus.ts` and the contributor format in `docs/pivot/corpus-ingestion-format.md`. Batches resolve canonical organisation slugs, reject missing source lineage and cap imports at 1,000 records for reviewability. Raw domain-observation records remain outside intelligence readiness counts.
+
 ## Evaluation
 
 R1 tests access allowlisting and empty-corpus behavior. R2 tests evidence ranking and citation safety. R3 tests alias resolution, multi-company planning, structured evidence needs, relevance filtering, freshness escalation and insufficient-evidence behaviour. Later releases expand this into 200 cross-intent questions and approximately 30 golden questions covering time validity, primary-source preference, citation validity, unsupported figures, follow-up context and regulatory disclaimers.
