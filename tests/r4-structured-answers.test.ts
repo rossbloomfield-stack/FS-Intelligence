@@ -5,7 +5,7 @@ import type {EvidenceReference} from "@/lib/intelligence/evidence";
 
 const aib={id:"aib-id",slug:"aib",name:"AIB",sector:"banking_payments",jurisdiction:"IE"};
 const boi={id:"boi-id",slug:"bank-of-ireland",name:"Bank of Ireland",sector:"banking_payments",jurisdiction:"IE"};
-const empty:StructuredKnowledge={digitalBenchmarks:[],aiInitiatives:[],competitorUpdates:[],timelineEvents:[],products:[]};
+const empty:StructuredKnowledge={strategyProfiles:[],financialMetrics:[],digitalCapabilities:[],digitalBenchmarks:[],aiInitiatives:[],competitorUpdates:[],timelineEvents:[],products:[]};
 const aibReference:EvidenceReference={id:"ref-1",sourceId:"source-1",title:"AIB Group results",publisher:"AIB Group plc",url:"https://aib.example/results",publicationDate:"2026-03-01",sourceType:"company_results",primary:true,classification:"primary_company",claimSupported:"Official AIB strategy source",supportStrength:"supporting",rank:1};
 
 describe("R4 structured answers",()=>{

@@ -1,0 +1,32 @@
+create index company_financial_metrics_source_idx on public.company_financial_metrics (source_id);
+create index company_strategy_profiles_previous_idx on public.company_strategy_profiles (previous_profile_id) where previous_profile_id is not null;
+create index digital_capabilities_source_idx on public.digital_capabilities (source_id);
+create index products_source_idx on public.products (source_id);
+create index product_page_benchmarks_product_idx on public.product_page_benchmarks (product_id) where product_id is not null;
+create index product_page_benchmarks_source_idx on public.product_page_benchmarks (source_id);
+
+drop policy admin_all_company_strategy_profiles on public.company_strategy_profiles;
+drop policy admin_all_company_strategy_profile_sources on public.company_strategy_profile_sources;
+drop policy admin_all_company_financial_metrics on public.company_financial_metrics;
+drop policy admin_all_products on public.products;
+drop policy admin_all_digital_capabilities on public.digital_capabilities;
+drop policy admin_all_product_page_benchmarks on public.product_page_benchmarks;
+
+create policy admin_insert_company_strategy_profiles on public.company_strategy_profiles for insert to authenticated with check (public.is_admin());
+create policy admin_update_company_strategy_profiles on public.company_strategy_profiles for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy admin_delete_company_strategy_profiles on public.company_strategy_profiles for delete to authenticated using (public.is_admin());
+create policy admin_insert_company_strategy_profile_sources on public.company_strategy_profile_sources for insert to authenticated with check (public.is_admin());
+create policy admin_update_company_strategy_profile_sources on public.company_strategy_profile_sources for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy admin_delete_company_strategy_profile_sources on public.company_strategy_profile_sources for delete to authenticated using (public.is_admin());
+create policy admin_insert_company_financial_metrics on public.company_financial_metrics for insert to authenticated with check (public.is_admin());
+create policy admin_update_company_financial_metrics on public.company_financial_metrics for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy admin_delete_company_financial_metrics on public.company_financial_metrics for delete to authenticated using (public.is_admin());
+create policy admin_insert_products on public.products for insert to authenticated with check (public.is_admin());
+create policy admin_update_products on public.products for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy admin_delete_products on public.products for delete to authenticated using (public.is_admin());
+create policy admin_insert_digital_capabilities on public.digital_capabilities for insert to authenticated with check (public.is_admin());
+create policy admin_update_digital_capabilities on public.digital_capabilities for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy admin_delete_digital_capabilities on public.digital_capabilities for delete to authenticated using (public.is_admin());
+create policy admin_insert_product_page_benchmarks on public.product_page_benchmarks for insert to authenticated with check (public.is_admin());
+create policy admin_update_product_page_benchmarks on public.product_page_benchmarks for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy admin_delete_product_page_benchmarks on public.product_page_benchmarks for delete to authenticated using (public.is_admin());

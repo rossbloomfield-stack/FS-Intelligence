@@ -1,7 +1,7 @@
 import type { EvidenceReference } from "@/lib/intelligence/evidence";
 import type { IntelligenceQueryPlan,ResolvedOrganisation } from "@/lib/intelligence/query-planner";
 
-export type CompanyIntelligenceCard={id:string;slug:string;name:string;sector:string;jurisdiction:string|null;digitalAssessment:string|null;aiAssessment:string|null;strategicTheme:string|null;evidenceReferenceIds:string[]};
+export type CompanyIntelligenceCard={id:string;slug:string;name:string;sector:string;jurisdiction:string|null;strategySummary:string|null;digitalAssessment:string|null;aiAssessment:string|null;strategicTheme:string|null;financialHighlights:string[];evidenceReferenceIds:string[]};
 export type ProductIntelligenceCard={id:string;provider:string;name:string;category:string;features:string[];journey:string|null;pricing:string|null;sourceReferenceId:string|null;thumbnailUrl:string|null};
 export type TimelineItem={id:string;date:string|null;label:string;summary:string;organisationNames:string[];sourceId:string|null;referenceId:string|null};
 export type StructuredAnswer=
@@ -11,6 +11,9 @@ export type StructuredAnswer=
  | {kind:"timeline";title:string;events:TimelineItem[];limitations:string[]};
 
 export type StructuredKnowledge={
+ strategyProfiles:Array<{id:string;organisation_id:string;strategy_summary:string;effective_at:string;confidence:"high"|"medium"|"low"|"insufficient"}>;
+ financialMetrics:Array<{id:string;organisation_id:string;metric:string;value:number;unit:string;period_end:string;source_id:string}>;
+ digitalCapabilities:Array<{id:string;organisation_id:string;capability:string;status:string;maturity:number|null;assessment:string|null;source_id:string}>;
  digitalBenchmarks:Array<{id:string;organisation_id:string|null;category:string;assessment:string|null;maturity:number|null}>;
  aiInitiatives:Array<{id:string;organisation_id:string;use_case:string;maturity:string;objective:string;last_changed:string|null}>;
  competitorUpdates:Array<{id:string;organisation_id:string;strategic_theme:string|null;customer_implication:string|null;commercial_implication:string|null}>;
@@ -31,10 +34,16 @@ export function buildStructuredAnswer(plan:IntelligenceQueryPlan,knowledge:Struc
 }
 
 function companyCard(organisation:ResolvedOrganisation,knowledge:StructuredKnowledge,references:EvidenceReference[]):CompanyIntelligenceCard{
+ const strategy=knowledge.strategyProfiles.find(item=>item.organisation_id===organisation.id);
+ const capabilities=knowledge.digitalCapabilities.filter(item=>item.organisation_id===organisation.id);
  const digital=knowledge.digitalBenchmarks.find(item=>item.organisation_id===organisation.id);
  const ai=knowledge.aiInitiatives.find(item=>item.organisation_id===organisation.id);
  const update=knowledge.competitorUpdates.find(item=>item.organisation_id===organisation.id);
  const names=[organisation.name.toLocaleLowerCase("en-IE"),organisation.slug.replaceAll("-"," ")];
  const evidenceReferenceIds=references.filter(reference=>names.some(name=>[reference.title,reference.publisher,reference.claimSupported].join(" ").toLocaleLowerCase("en-IE").includes(name))).map(reference=>reference.id);
- return {id:organisation.id,slug:organisation.slug,name:organisation.name,sector:organisation.sector,jurisdiction:organisation.jurisdiction,digitalAssessment:digital?.assessment??(digital?.maturity!=null?`Maturity ${digital.maturity}/5`:null),aiAssessment:ai?`${ai.maturity} — ${ai.use_case}`:null,strategicTheme:update?.strategic_theme??null,evidenceReferenceIds};
+ const digitalAssessment=capabilities.length?capabilities.slice(0,3).map(item=>`${humanise(item.capability)}: ${humanise(item.status)}${item.maturity?` (${item.maturity}/5)`:""}`).join(" · "):digital?.assessment??(digital?.maturity!=null?`Maturity ${digital.maturity}/5`:null);
+ const financialHighlights=knowledge.financialMetrics.filter(item=>item.organisation_id===organisation.id).slice(0,3).map(item=>`${humanise(item.metric)}: ${item.value.toLocaleString("en-IE")} ${item.unit} (${item.period_end})`);
+ return {id:organisation.id,slug:organisation.slug,name:organisation.name,sector:organisation.sector,jurisdiction:organisation.jurisdiction,strategySummary:strategy?.strategy_summary??null,digitalAssessment,aiAssessment:ai?`${ai.maturity} — ${ai.use_case}`:null,strategicTheme:update?.strategic_theme??null,financialHighlights,evidenceReferenceIds};
 }
+
+function humanise(value:string){return value.replaceAll("_"," ").replace(/^./,letter=>letter.toUpperCase())}
