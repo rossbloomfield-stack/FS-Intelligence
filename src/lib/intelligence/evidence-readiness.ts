@@ -7,5 +7,5 @@ export function answerForEvidenceCount(count:number){
 export function answerForRetrieval(count:number,gaps:string[]){
  if(count===0)return answerForEvidenceCount(0);
  const gapText=gaps.length?` Remaining evidence gaps: ${gaps.join(" ")}`:"";
- return `I found ${count} directly relevant approved primary ${count===1?"reference":"references"} and have shown their provenance alongside this response. Evidence-grounded synthesis is not enabled in R3, so I have not converted retrieval results into a substantive conclusion.${gapText}`;
+ return `I found ${count} directly relevant approved primary ${count===1?"reference":"references"} and have shown their provenance alongside this response. Evidence-grounded narrative synthesis is not enabled for this release, so I have not converted retrieval results into a substantive conclusion.${gapText}`;
 }

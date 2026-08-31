@@ -60,7 +60,7 @@ export function planIntelligenceQuery(question:string,organisations:ResolvedOrga
   else if(organisations.length===1&&intent==="market_overview")intent="company_strategy";
   const timeframe=parseTimeframe(question);
   const regulations=matches(question,["Consumer Protection Code","DORA","FIDA","AI Act"]);
-  const products=matches(question,["pensions","investments","wealth","mortgages","mortgage protection","protection","health insurance","savings","payments"]);
+  const products=extractProducts(question);
   const themes=matches(question,["agentic AI","open finance","digital advice","operational resilience","financial wellbeing","personalisation"]);
   const freshVerificationRequired=timeframe.currentInformationRequired||intent==="regulatory_question"||intent==="compliance_question";
   return {intent,organisations,sectors:[...new Set(organisations.map(item=>item.sector))],products,jurisdictions:[...new Set(organisations.map(item=>item.jurisdiction).filter((v):v is string=>Boolean(v)))],regulations,themes,timeframe,comparisonRequested,strategicInterpretationRequired:["company_strategy","company_comparison","future_scenario","strategic_recommendation","market_overview"].includes(intent),evidenceNeeds:evidenceByIntent[intent],freshVerificationRequired};
@@ -72,3 +72,22 @@ function parseTimeframe(question:string):QueryTimeframe{
   return {label,currentInformationRequired:["today","this_week","this_month","this_quarter"].includes(label)||/\b(latest|current)\b/i.test(question)};
 }
 function matches(question:string,values:string[]){return values.filter(value=>question.toLocaleLowerCase("en-IE").includes(value.toLocaleLowerCase("en-IE")))}
+
+function extractProducts(question:string){
+  const value=question.toLocaleLowerCase("en-IE");
+  const categories:Array<[string,RegExp]>=[
+    ["mortgage_protection",/\bmortgage protection\b/],
+    ["health_insurance",/\bhealth insurance\b/],
+    ["pensions",/\bpensions?\b/],
+    ["investments",/\binvestments?\b/],
+    ["wealth",/\bwealth\b/],
+    ["mortgages",/\bmortgages?\b/],
+    ["protection",/\bprotection\b/],
+    ["savings",/\bsavings?\b/],
+    ["payments",/\bpayments?\b/],
+  ];
+  const matched=categories.filter(([,pattern])=>pattern.test(value)).map(([category])=>category);
+  if(matched.includes("mortgage_protection"))return matched.filter(category=>category!=="mortgages"&&category!=="protection");
+  if(matched.includes("health_insurance"))return matched.filter(category=>category!=="protection");
+  return matched;
+}

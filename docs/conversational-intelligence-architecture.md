@@ -4,7 +4,7 @@
 
 `/intelligence` is the primary conversational surface. Supabase Auth protects all intelligence pages and APIs using `APPROVED_USER_EMAILS`; unapproved browser requests redirect to login and API requests receive HTTP 401. Conversations are user-owned through existing RLS policies.
 
-The client uses the installed Vercel AI SDK transport and `useChat` contract. The server returns an AI SDK UI-message stream. In R1, retrieval checks the count of approved source records before any synthesis. With the current empty corpus it streams an explicit insufficient-evidence response and does not call a model.
+The client uses the installed Vercel AI SDK transport and `useChat` contract. The server returns an AI SDK UI-message stream. Retrieval checks approved source and structured-domain records before any synthesis. Questions without sufficient approved evidence stream an explicit insufficient-evidence response and do not call a model.
 
 ## R3 retrieval architecture
 
@@ -41,6 +41,12 @@ Launch requires at least 5,000 quality-assured references; 15,000 is preferred. 
 R5 adds versioned company strategy profiles, source-linked financial time series, product propositions, atomic digital capabilities and approved product-page benchmarks. Existing customer signals gain explicit survey and evidence dates. Each domain row is withheld from authenticated retrieval until human approval, and the database retains its source foreign key or claim-level join.
 
 Corpus additions use the versioned Zod contract in `src/schemas/intelligence-corpus.ts` and the contributor format in `docs/pivot/corpus-ingestion-format.md`. Batches resolve canonical organisation slugs, reject missing source lineage and cap imports at 1,000 records for reviewability. Raw domain-observation records remain outside intelligence readiness counts.
+
+## R5.1 production corpus activation
+
+R5.1 activates the first reviewed structured production batch. The approved corpus now contains 11 primary references, two current company-strategy profiles, 15 FY2025 financial observations, eight source-linked digital/AI capability records and three Irish mortgage-protection products. The batch covers AIB, Bank of Ireland, Irish Life, Zurich Life and AIB Life. Records were inserted unapproved, reviewed for source, entity, date, unit and duplication integrity, and then explicitly approved.
+
+Generic product-comparison questions now use canonical product categories, so `Compare mortgage protection products` can load reviewed product cards without requiring company names. Narrative synthesis remains fail-closed until wider evidence coverage and citation QA meet the release threshold.
 
 ## Evaluation
 

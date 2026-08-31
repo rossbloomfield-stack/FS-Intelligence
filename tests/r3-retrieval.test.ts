@@ -31,7 +31,9 @@ describe("R3 query planning",()=>{
   expect(plan.freshVerificationRequired).toBe(true);
  });
  it("distinguishes product comparison from company comparison",()=>{
-  expect(planIntelligenceQuery("Compare mortgage protection products",[]).intent).toBe("product_comparison");
+  const plan=planIntelligenceQuery("Compare mortgage protection products",[]);
+  expect(plan.intent).toBe("product_comparison");
+  expect(plan.products).toEqual(["mortgage_protection"]);
  });
 });
 

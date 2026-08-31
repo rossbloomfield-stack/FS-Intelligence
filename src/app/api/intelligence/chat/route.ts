@@ -32,7 +32,7 @@ export async function POST(request:Request){
  const domainAvailability=await loadDomainAvailability(supabase,plan.evidenceNeeds);
  const retrieval=retrieveFinancialIntelligence(question,plan,sourceRows??[],new Date(),domainAvailability);
  const {references,evidence,gaps}=retrieval;
- const structuredKnowledge=await loadStructuredKnowledge(supabase,plan.organisations.map(item=>item.id),references);
+ const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references);
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
  const answer=answerForRetrieval(references.length,gaps);
  const title=question.length>72?`${question.slice(0,69)}…`:question;
@@ -60,20 +60,25 @@ async function loadDomainAvailability(supabase:Awaited<ReturnType<typeof createC
  return Object.fromEntries(results);
 }
 
-async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof createClient>>,organisationIds:string[],references:import("@/lib/intelligence/evidence").EvidenceReference[]):Promise<StructuredKnowledge>{
- if(!organisationIds.length)return {strategyProfiles:[],financialMetrics:[],digitalCapabilities:[],digitalBenchmarks:[],aiInitiatives:[],competitorUpdates:[],timelineEvents:[],products:[]};
+async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof createClient>>,plan:ReturnType<typeof planIntelligenceQuery>,references:import("@/lib/intelligence/evidence").EvidenceReference[]):Promise<StructuredKnowledge>{
+ const organisationIds=plan.organisations.map(item=>item.id);
+ const emptyResult={data:[]};
+ let productQuery=supabase.from("products").select("id,organisation_id,name,category,key_features,online_journey,pricing,fees,source_id").eq("approved",true).order("last_verified_at",{ascending:false}).limit(30);
+ if(organisationIds.length)productQuery=productQuery.in("organisation_id",organisationIds);
+ else if(plan.products.length)productQuery=productQuery.in("category",plan.products);
  const [strategies,metrics,capabilities,products,digital,ai,updates,eventLinks]=await Promise.all([
-  supabase.from("company_strategy_profiles").select("id,organisation_id,strategy_summary,effective_at,confidence").in("organisation_id",organisationIds).eq("approved",true).order("effective_at",{ascending:false}).limit(30),
-  supabase.from("company_financial_metrics").select("id,organisation_id,metric,value,unit,period_end,source_id").in("organisation_id",organisationIds).eq("approved",true).order("period_end",{ascending:false}).limit(50),
-  supabase.from("digital_capabilities").select("id,organisation_id,capability,status,maturity,assessment,source_id").in("organisation_id",organisationIds).eq("approved",true).order("last_verified_at",{ascending:false}).limit(50),
-  supabase.from("products").select("id,organisation_id,name,category,key_features,online_journey,pricing,fees,source_id").in("organisation_id",organisationIds).eq("approved",true).order("last_verified_at",{ascending:false}).limit(30),
-  supabase.from("digital_benchmarks").select("id,organisation_id,category,assessment,maturity").in("organisation_id",organisationIds).order("updated_at",{ascending:false}).limit(30),
-  supabase.from("ai_initiatives").select("id,organisation_id,use_case,maturity,objective,last_changed").in("organisation_id",organisationIds).order("last_changed",{ascending:false}).limit(30),
-  supabase.from("competitor_updates").select("id,organisation_id,strategic_theme,customer_implication,commercial_implication").in("organisation_id",organisationIds).order("updated_at",{ascending:false}).limit(30),
-  supabase.from("event_organisations").select("organisation_id,candidate_events(id,title,event_date,announcement_date,source_publication_date,factual_summary)").in("organisation_id",organisationIds).limit(50),
+  organisationIds.length?supabase.from("company_strategy_profiles").select("id,organisation_id,strategy_summary,effective_at,confidence").in("organisation_id",organisationIds).eq("approved",true).order("effective_at",{ascending:false}).limit(30):Promise.resolve(emptyResult),
+  organisationIds.length?supabase.from("company_financial_metrics").select("id,organisation_id,metric,value,unit,period_end,source_id").in("organisation_id",organisationIds).eq("approved",true).order("period_end",{ascending:false}).limit(50):Promise.resolve(emptyResult),
+  organisationIds.length?supabase.from("digital_capabilities").select("id,organisation_id,capability,status,maturity,assessment,source_id").in("organisation_id",organisationIds).eq("approved",true).order("last_verified_at",{ascending:false}).limit(50):Promise.resolve(emptyResult),
+  plan.intent==="product_comparison"||organisationIds.length?productQuery:Promise.resolve(emptyResult),
+  organisationIds.length?supabase.from("digital_benchmarks").select("id,organisation_id,category,assessment,maturity").in("organisation_id",organisationIds).order("updated_at",{ascending:false}).limit(30):Promise.resolve(emptyResult),
+  organisationIds.length?supabase.from("ai_initiatives").select("id,organisation_id,use_case,maturity,objective,last_changed").in("organisation_id",organisationIds).order("last_changed",{ascending:false}).limit(30):Promise.resolve(emptyResult),
+  organisationIds.length?supabase.from("competitor_updates").select("id,organisation_id,strategic_theme,customer_implication,commercial_implication").in("organisation_id",organisationIds).order("updated_at",{ascending:false}).limit(30):Promise.resolve(emptyResult),
+  organisationIds.length?supabase.from("event_organisations").select("organisation_id,candidate_events(id,title,event_date,announcement_date,source_publication_date,factual_summary)").in("organisation_id",organisationIds).limit(50):Promise.resolve(emptyResult),
  ]);
+ const knowledgeOrganisationIds=[...new Set([...organisationIds,...(products.data??[]).map(item=>item.organisation_id)])];
  const organisationNames=new Map<string,string>();
- const {data:names}=await supabase.from("organisations").select("id,name").in("id",organisationIds);
+ const {data:names}=knowledgeOrganisationIds.length?await supabase.from("organisations").select("id,name").in("id",knowledgeOrganisationIds):{data:[]};
  for(const item of names??[])organisationNames.set(item.id,item.name);
  const eventIds=(eventLinks.data??[]).flatMap(link=>{const event=Array.isArray(link.candidate_events)?link.candidate_events[0]:link.candidate_events;return event?[event.id]:[]});
  const {data:eventSources}=eventIds.length?await supabase.from("event_sources").select("event_id,source_id").in("event_id",eventIds):{data:[]};

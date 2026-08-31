@@ -1,5 +1,7 @@
 # R2 production demo evidence corpus
 
+> Historical release record. R5.1 expands the approved production inventory to 11 sources and 28 structured domain records; see `r5-1-production-corpus.md`.
+
 R2 adds a deliberately small, quality-assured set of primary references to the existing production Supabase project. It proves evidence retrieval, ranking, persistence and display without pretending that the knowledge base is ready for broad synthesis.
 
 The initial corpus contains six approved public records:
