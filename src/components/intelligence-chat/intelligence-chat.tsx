@@ -10,9 +10,9 @@ import type { EvidencePackage,IntelligenceUIMessage } from "@/lib/intelligence/e
 
 const prompts=["What matters most this week?","What has changed in the last 30 days?","Where is AI investment accelerating?","What should an Irish financial-services CEO watch?"];
 const chatTransport=new DefaultChatTransport({api:"/api/intelligence/chat"});
-export function IntelligenceChat({initialHistory=[]}:{initialHistory?:{id:string;title:string;updated_at:string}[]}){
+export function IntelligenceChat({conversationId,initialHistory=[]}:{conversationId:string;initialHistory?:{id:string;title:string;updated_at:string}[]}){
  const [input,setInput]=useState("");const [evidenceOpen,setEvidenceOpen]=useState(false);
- const {messages,sendMessage,status,stop,error}=useChat<IntelligenceUIMessage>({transport:chatTransport});
+ const {messages,sendMessage,status,stop,error}=useChat<IntelligenceUIMessage>({id:conversationId,transport:chatTransport});
  const busy=status==="submitted"||status==="streaming";
  const evidence=useMemo(()=>{for(let index=messages.length-1;index>=0;index--){const part=messages[index].parts.find(item=>item.type==="data-evidence");if(part)return part.data}return null as EvidencePackage|null},[messages]);
  const closeEvidence=useCallback(()=>setEvidenceOpen(false),[]);
