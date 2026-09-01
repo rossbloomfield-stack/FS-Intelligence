@@ -6,7 +6,7 @@ import { answerForRetrieval } from "@/lib/intelligence/evidence-readiness";
 import { type IntelligenceUIMessage } from "@/lib/intelligence/evidence";
 import { attachAliases,resolveOrganisations } from "@/lib/intelligence/entity-resolver";
 import { planIntelligenceQuery } from "@/lib/intelligence/query-planner";
-import { retrieveFinancialIntelligence } from "@/lib/intelligence/retriever";
+import { mergeApprovedEvidenceRows,retrieveFinancialIntelligence,type ApprovedSourceChunkRow } from "@/lib/intelligence/retriever";
 import { buildStructuredAnswer,type StructuredKnowledge } from "@/lib/intelligence/structured-answer";
 
 export const maxDuration=30;
@@ -21,8 +21,9 @@ export async function POST(request:Request){
  const body=parsed.data as {id?:string;messages:IntelligenceUIMessage[]};
  const question=messageText(body.messages.at(-1));
  if(!question||question.length>4000)return Response.json({error:"A valid question is required"},{status:400});
- const [{data:sourceRows},{data:organisationRows},{data:aliasRows}]=await Promise.all([
+ const [{data:sourceRows},{data:chunkRows},{data:organisationRows},{data:aliasRows}]=await Promise.all([
   supabase.from("sources").select("id,title,publisher,url,publication_date,source_type,primary_source,credibility_tier,evidence_classification,notes").eq("approved_public",true).limit(100),
+  supabase.rpc("search_approved_source_chunks",{search_query:question,result_limit:20}),
   supabase.from("organisations").select("id,slug,name,sector,jurisdiction").eq("active",true),
   supabase.from("organisation_aliases").select("organisation_id,alias"),
  ]);
@@ -30,11 +31,12 @@ export async function POST(request:Request){
  const organisations=resolveOrganisations(question,catalogue);
  const plan=planIntelligenceQuery(question,organisations);
  const domainAvailability=await loadDomainAvailability(supabase,plan.evidenceNeeds);
- const retrieval=retrieveFinancialIntelligence(question,plan,sourceRows??[],new Date(),domainAvailability);
+ const retrievalRows=mergeApprovedEvidenceRows(sourceRows??[],(chunkRows??[]) as ApprovedSourceChunkRow[]);
+ const retrieval=retrieveFinancialIntelligence(question,plan,retrievalRows,new Date(),domainAvailability);
  const {references,evidence,gaps}=retrieval;
  const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references);
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
- const answer=answerForRetrieval(references.length,gaps);
+ const answer=answerForRetrieval(references,gaps);
  const title=question.length>72?`${question.slice(0,69)}…`:question;
  const conversationId=body.id??crypto.randomUUID();
  await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps},updated_at:new Date().toISOString()},{onConflict:"id"});

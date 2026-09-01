@@ -2,6 +2,7 @@ import {describe,expect,it} from "vitest";
 import {resolveOrganisations} from "@/lib/intelligence/entity-resolver";
 import {planIntelligenceQuery} from "@/lib/intelligence/query-planner";
 import {retrieveFinancialIntelligence,type IntelligenceSourceRow} from "@/lib/intelligence/retriever";
+import {answerForRetrieval} from "@/lib/intelligence/evidence-readiness";
 
 const organisations=[
  {id:"aib-id",slug:"aib",name:"AIB",sector:"banking_payments",jurisdiction:"IE"},
@@ -55,5 +56,16 @@ describe("R3 hybrid retrieval gate",()=>{
   const result=retrieveFinancialIntelligence("What does DORA require?",plan,sources);
   expect(result.references[0]?.sourceId).toBe("dora-source");
   expect(result.freshnessAssessment.requiresFreshResearch).toBe(true);
+ });
+});
+
+describe("approved evidence answer",()=>{
+ it("surfaces bounded factual findings with matching evidence markers",()=>{
+  const plan=planIntelligenceQuery("What is AIB's strategy?",resolveOrganisations("What is AIB's strategy?",organisations));
+  const result=retrieveFinancialIntelligence("What is AIB's strategy?",plan,sources);
+  const answer=answerForRetrieval(result.references,result.gaps);
+  expect(answer).toContain("What the approved evidence shows");
+  expect(answer).toContain("Official AIB performance and strategy source. [1]");
+  expect(answer).not.toContain("synthesis is not enabled");
  });
 });

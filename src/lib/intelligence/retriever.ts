@@ -3,10 +3,25 @@ import { assessFreshness,type FreshnessAssessment } from "@/lib/intelligence/fre
 import type { IntelligenceQueryPlan } from "@/lib/intelligence/query-planner";
 
 export type IntelligenceSourceRow={id:string;title:string|null;publisher:string|null;url:string|null;publication_date:string|null;source_type:string|null;primary_source:boolean|null;credibility_tier:number|null;evidence_classification:string|null;notes:string|null};
+export type ApprovedSourceChunkRow={evidence_source_id:string;title:string;publisher:string;url:string;publication_date:string|null;source_type:string;primary_source:boolean;credibility_tier:number;evidence_classification:string|null;chunk_content:string;section_label:string|null;page_number:number|null};
 export type DomainAvailability=Record<string,number>;
 export type RetrievalResult={references:EvidenceReference[];evidence:EvidencePackage;freshnessAssessment:FreshnessAssessment;domainAvailability:DomainAvailability;gaps:string[]};
 
 const stopWords=new Set(["about","after","before","could","does","doing","from","have","into","irish","most","should","that","their","the","this","what","which","with","would","your"]);
+export function mergeApprovedEvidenceRows(documentRows:IntelligenceSourceRow[],chunkRows:ApprovedSourceChunkRow[]):IntelligenceSourceRow[]{
+  const rows=new Map(documentRows.map(row=>[row.id,row]));
+  for(const chunk of chunkRows){
+    const location=[chunk.section_label,chunk.page_number?`page ${chunk.page_number}`:null].filter(Boolean).join(", ");
+    const note=location?`${chunk.chunk_content} (${location})`:chunk.chunk_content;
+    const existing=rows.get(chunk.evidence_source_id);
+    rows.set(chunk.evidence_source_id,existing?{...existing,notes:[existing.notes,note].filter(Boolean).join(" ")}:{
+      id:chunk.evidence_source_id,title:chunk.title,publisher:chunk.publisher,url:chunk.url,
+      publication_date:chunk.publication_date,source_type:chunk.source_type,primary_source:chunk.primary_source,
+      credibility_tier:chunk.credibility_tier,evidence_classification:chunk.evidence_classification,notes:note,
+    });
+  }
+  return [...rows.values()];
+}
 export function retrieveFinancialIntelligence(question:string,plan:IntelligenceQueryPlan,rows:IntelligenceSourceRow[],now=new Date(),domainAvailability:DomainAvailability={}):RetrievalResult{
   const terms=tokenise(question);
   const organisations=plan.organisations.flatMap(item=>[item.name,item.slug.replaceAll("-"," ")]).map(value=>value.toLocaleLowerCase("en-IE"));
