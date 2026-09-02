@@ -9,7 +9,7 @@ R5.3 converts the R5.2 verification queue from passive database records into dur
 1. `claim_source_ingestion_runs` atomically claims at most five eligible runs with `FOR UPDATE SKIP LOCKED`.
 2. a Vercel Workflow run is started for each claimed target;
 3. a step reloads the connector and target and verifies both remain enabled and approved for fetch;
-4. the fetcher enforces an exact host allow-list, HTTPS, redirect, timeout and 16 MB response limits;
+4. the fetcher enforces an exact host allow-list, HTTPS, redirect, timeout and 48 MB response limits;
 5. HTML archive pages are searched for the strongest year- and document-type match;
 6. HTML or PDF content is parsed in memory and reduced to at most 24 strategy-relevant passages;
 7. the source item, hashes, passages, organisation relationship and run metrics are persisted idempotently;
@@ -34,7 +34,7 @@ The two existing DST-safe daily cron invocations each attempt to drain two appro
 
 - HTTP 429 and server failures receive bounded workflow retries.
 - access challenges, unsupported content, unapproved hosts and empty extraction are blocked without repeated fetching;
-- response bodies larger than 16 MB are rejected;
+- response bodies larger than 48 MB are rejected;
 - failed runs and connector failure counts are persisted;
 - a blocked target records its reason for research-operations review;
 - retries and persistence are idempotent by run ID and canonical-document hash.

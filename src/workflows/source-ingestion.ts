@@ -21,7 +21,12 @@ export async function sourceIngestionWorkflow(runId: string) {
       status: "awaiting_review" as const,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown source-ingestion failure";
+    const message =
+      error instanceof Error
+        ? error.message
+        : error && typeof error === "object" && "message" in error && typeof error.message === "string"
+          ? error.message
+          : "Unknown source-ingestion failure";
     await failSourceIngestionRun(runId, message);
     return { runId, status: "failed" as const, error: message };
   }

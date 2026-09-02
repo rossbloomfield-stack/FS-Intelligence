@@ -19,7 +19,10 @@ import type {
   SourceIngestionContext,
 } from "@/schemas/source-ingestion";
 
-const MAX_FETCH_BYTES = 16 * 1024 * 1024;
+// Annual reports are often image-heavy even when we retain only a bounded text
+// subset. Keep the network ceiling finite while allowing the monitored banks'
+// official reports to pass through the 160-page extraction boundary below.
+const MAX_FETCH_BYTES = 48 * 1024 * 1024;
 const MAX_PDF_PAGES = 160;
 const MAX_PDF_EXTRACTION_MS = 45_000;
 const USER_AGENT =
@@ -333,7 +336,10 @@ export async function failSourceIngestionRun(runId: string, message: string) {
     .select("connector_id,reference_target_id")
     .eq("id", runId)
     .maybeSingle();
-  const blocked = /access challenge|not approved|not allowed|unsupported|not found|no relevant/i.test(message);
+  const blocked =
+    /access challenge|not approved|not allowed|unsupported|not found|no relevant|exceeds the|HTTP (?:401|403|404)/i.test(
+      message,
+    );
   await db
     .from("source_ingestion_runs")
     .update({
@@ -392,7 +398,7 @@ async function fetchBounded(value: string, allowedHosts: ReadonlySet<string>) {
     if (response.status >= 500) throw new RetryableError(`Official source returned HTTP ${response.status}`, { retryAfter: "2m" });
     if (!response.ok) throw new FatalError(`Official source returned HTTP ${response.status}`);
     const declaredLength = Number(response.headers.get("content-length") ?? 0);
-    if (declaredLength > MAX_FETCH_BYTES) throw new FatalError("Official source exceeds the 16 MB ingestion limit");
+    if (declaredLength > MAX_FETCH_BYTES) throw new FatalError("Official source exceeds the 48 MB ingestion limit");
     const body = await readBoundedBody(response, MAX_FETCH_BYTES);
     return { response, body, url: current.toString() };
   }
