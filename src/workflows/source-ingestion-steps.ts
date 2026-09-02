@@ -300,6 +300,7 @@ export async function completeSourceIngestionRun(
       discovered_count: 1,
       fetched_count: 1,
       parsed_count: 1,
+      error_count: 0,
       bytes_fetched: document.bytesFetched,
       completed_at: new Date().toISOString(),
       error_summary: requiresDateReview ? "Publication date requires human verification" : null,
