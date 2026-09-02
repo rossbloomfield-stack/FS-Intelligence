@@ -11,12 +11,12 @@ export type StructuredAnswer=
  | {kind:"timeline";title:string;events:TimelineItem[];limitations:string[]};
 
 export type StructuredKnowledge={
- strategyProfiles:Array<{id:string;organisation_id:string;strategy_summary:string;effective_at:string;confidence:"high"|"medium"|"low"|"insufficient"}>;
- financialMetrics:Array<{id:string;organisation_id:string;metric:string;value:number;unit:string;period_end:string;source_id:string}>;
- digitalCapabilities:Array<{id:string;organisation_id:string;capability:string;status:string;maturity:number|null;assessment:string|null;source_id:string}>;
- digitalBenchmarks:Array<{id:string;organisation_id:string|null;category:string;assessment:string|null;maturity:number|null}>;
- aiInitiatives:Array<{id:string;organisation_id:string;use_case:string;maturity:string;objective:string;last_changed:string|null}>;
- competitorUpdates:Array<{id:string;organisation_id:string;strategic_theme:string|null;customer_implication:string|null;commercial_implication:string|null}>;
+ strategyProfiles:Array<{id:string;organisation_id:string;organisation_name?:string;strategy_summary:string;effective_at:string;confidence:"high"|"medium"|"low"|"insufficient"}>;
+ financialMetrics:Array<{id:string;organisation_id:string;organisation_name?:string;metric:string;value:number;unit:string;period_end:string;source_id:string}>;
+ digitalCapabilities:Array<{id:string;organisation_id:string;organisation_name?:string;capability:string;status:string;maturity:number|null;assessment:string|null;source_id:string}>;
+ digitalBenchmarks:Array<{id:string;organisation_id:string|null;organisation_name?:string;category:string;assessment:string|null;maturity:number|null}>;
+ aiInitiatives:Array<{id:string;organisation_id:string;organisation_name?:string;use_case:string;maturity:string;objective:string;last_changed:string|null}>;
+ competitorUpdates:Array<{id:string;organisation_id:string;organisation_name?:string;strategic_theme:string|null;customer_implication:string|null;commercial_implication:string|null}>;
  timelineEvents:TimelineItem[];
  products:ProductIntelligenceCard[];
 };

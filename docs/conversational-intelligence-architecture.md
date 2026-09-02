@@ -48,6 +48,12 @@ R5.1 activates the first reviewed structured production batch. The approved corp
 
 Generic product-comparison questions now use canonical product categories, so `Compare mortgage protection products` can load reviewed product cards without requiring company names. Narrative synthesis remains fail-closed until wider evidence coverage and citation QA meet the release threshold.
 
+## R5.2 corpus activation and retrieval depth
+
+R5.2 separates the evidence shown to a user from the passages supplied to synthesis. Full-text search returns up to 60 approved passage candidates with linked organisation names; deterministic application reranking selects at most ten source records and supplies up to 18 passages to the answer model. The evidence panel continues to present a concise source list while reporting the underlying passage footprint accurately.
+
+Broad executive questions use intent-specific search expansion and may load approved market-wide strategy, financial and digital-capability records without requiring a named organisation. The first production connector cohort enables 20 readiness-A 2025 reporting targets across five verified, terms-cleared sources. These create bounded verification work only: approval remains mandatory before discovered evidence can enter conversation.
+
 ## Evaluation
 
 R1 tests access allowlisting and empty-corpus behavior. R2 tests evidence ranking and citation safety. R3 tests alias resolution, multi-company planning, structured evidence needs, relevance filtering, freshness escalation and insufficient-evidence behaviour. Later releases expand this into 200 cross-intent questions and approximately 30 golden questions covering time validity, primary-source preference, citation validity, unsupported figures, follow-up context and regulatory disclaimers.

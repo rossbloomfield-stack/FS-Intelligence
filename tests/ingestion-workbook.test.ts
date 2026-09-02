@@ -124,11 +124,14 @@ describe("approved evidence retrieval", () => {
       id:"source-1",title:"Annual report",publisher:"Bank",url:"https://bank.example/report",publication_date:"2025-12-31",
       source_type:"company_results",primary_source:true,credibility_tier:1,evidence_classification:"primary",notes:"Existing note",
     }],[{
+      source_item_id:"item-1",
       evidence_source_id:"source-1",title:"Annual report",publisher:"Bank",url:"https://bank.example/report",publication_date:"2025-12-31",
-      source_type:"company_results",primary_source:true,credibility_tier:1,evidence_classification:"primary",chunk_content:"Wealth assets increased.",section_label:"Strategy",page_number:12,
+      source_type:"company_results",primary_source:true,credibility_tier:1,evidence_classification:"primary",chunk_content:"Wealth assets increased.",section_label:"Strategy",page_number:12,organisation_names:["Bank"],relevance:0.75,
     }]);
     expect(rows).toHaveLength(1);
     expect(rows[0].notes).toContain("Existing note");
     expect(rows[0].notes).toContain("Wealth assets increased. (Strategy, page 12)");
+    expect(rows[0].passages).toEqual([expect.objectContaining({content:"Wealth assets increased.",relevance:0.75})]);
+    expect(rows[0].organisation_names).toEqual(["Bank"]);
   });
 });

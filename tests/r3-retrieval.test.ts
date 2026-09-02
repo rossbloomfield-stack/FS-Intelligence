@@ -1,7 +1,7 @@
 import {describe,expect,it} from "vitest";
 import {resolveOrganisations} from "@/lib/intelligence/entity-resolver";
 import {planIntelligenceQuery} from "@/lib/intelligence/query-planner";
-import {retrieveFinancialIntelligence,type IntelligenceSourceRow} from "@/lib/intelligence/retriever";
+import {buildRetrievalSearchQuery,retrieveFinancialIntelligence,type IntelligenceSourceRow} from "@/lib/intelligence/retriever";
 import {answerForRetrieval} from "@/lib/intelligence/evidence-readiness";
 
 const organisations=[
@@ -41,6 +41,13 @@ describe("R3 query planning",()=>{
   expect(plan.intent).toBe("market_overview");
   expect(plan.strategicInterpretationRequired).toBe(true);
  });
+ it("expands broad executive questions into evidence-domain search terms",()=>{
+  const plan=planIntelligenceQuery("What are my competitors doing that I should be worried about?",[]);
+  const query=buildRetrievalSearchQuery("What are my competitors doing that I should be worried about?",plan);
+  expect(query).toContain("strategy");
+  expect(query).toContain("competition");
+  expect(query).toContain("risk");
+ });
 });
 
 describe("R3 hybrid retrieval gate",()=>{
@@ -61,6 +68,17 @@ describe("R3 hybrid retrieval gate",()=>{
   const result=retrieveFinancialIntelligence("What does DORA require?",plan,sources);
   expect(result.references[0]?.sourceId).toBe("dora-source");
   expect(result.freshnessAssessment.requiresFreshResearch).toBe(true);
+ });
+ it("retains multiple ranked passages for synthesis while deduplicating source cards",()=>{
+  const plan=planIntelligenceQuery("What is AIB's strategy?",resolveOrganisations("What is AIB's strategy?",organisations));
+  const enriched=[{...sources[0],passages:[
+   {id:"item:1",content:"AIB is investing in digital customer journeys.",sectionLabel:"Strategy",pageNumber:12,relevance:0.8},
+   {id:"item:2",content:"AIB reported increased technology investment.",sectionLabel:"Investment",pageNumber:18,relevance:0.6},
+  ]}];
+  const result=retrieveFinancialIntelligence("What is AIB's strategy?",plan,enriched);
+  expect(result.references).toHaveLength(1);
+  expect(result.references[0].passages).toHaveLength(2);
+  expect(result.evidence.passageCount).toBe(2);
  });
 });
 

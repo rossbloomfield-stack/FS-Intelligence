@@ -159,3 +159,11 @@ Backfills remain resumable and bounded by parent connector, target, year and doc
 ## Deferred from this release
 
 The registry and first annual-report evidence cohort are production-ready. Automated due-connector scheduling, broad API/regulatory adapters, archive backfill beyond the five-document verification cohort, generalised document parsing and admin connector controls remain subsequent controlled releases. No bulk crawl has been scheduled implicitly.
+
+## R5.2 activation update
+
+R5.2 enabled five verified, terms-cleared reporting connectors and 20 readiness-A targets restricted to 2025 annual reports, results material and regulatory/capital disclosures. It recorded one queued verification run per target. The queue is an auditable worklist, not evidence and not a claim that ingestion has completed.
+
+Ten approved document records that pre-dated `source_items` were promoted using their existing reviewed factual notes. Production therefore contains 15 approved source items and 21 searchable passages. The representative competitor-risk question now retrieves ten passages from eight approved sources after deterministic intent expansion.
+
+The next ingestion increment is a bounded worker for the queued cohort, followed by review and explicit approval. Wider A-grade activation, B-grade discovery and every C-grade target remain disabled.

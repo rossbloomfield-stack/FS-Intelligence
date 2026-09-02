@@ -1,25 +1,42 @@
-import { makeEvidencePackage,validateEvidence,type EvidencePackage,type EvidenceReference } from "@/lib/intelligence/evidence";
+import { makeEvidencePackage,validateEvidence,type EvidencePackage,type EvidencePassage,type EvidenceReference } from "@/lib/intelligence/evidence";
 import { assessFreshness,type FreshnessAssessment } from "@/lib/intelligence/freshness";
 import type { IntelligenceQueryPlan } from "@/lib/intelligence/query-planner";
 
-export type IntelligenceSourceRow={id:string;title:string|null;publisher:string|null;url:string|null;publication_date:string|null;source_type:string|null;primary_source:boolean|null;credibility_tier:number|null;evidence_classification:string|null;notes:string|null};
-export type ApprovedSourceChunkRow={evidence_source_id:string;title:string;publisher:string;url:string;publication_date:string|null;source_type:string;primary_source:boolean;credibility_tier:number;evidence_classification:string|null;chunk_content:string;section_label:string|null;page_number:number|null};
+export type IntelligenceSourceRow={id:string;title:string|null;publisher:string|null;url:string|null;publication_date:string|null;source_type:string|null;primary_source:boolean|null;credibility_tier:number|null;evidence_classification:string|null;notes:string|null;organisation_names?:string[];passages?:EvidencePassage[]};
+export type ApprovedSourceChunkRow={source_item_id:string;evidence_source_id:string;title:string;publisher:string;url:string;publication_date:string|null;source_type:string;primary_source:boolean;credibility_tier:number;evidence_classification:string|null;chunk_content:string;section_label:string|null;page_number:number|null;organisation_names?:string[]|null;relevance?:number|null};
 export type DomainAvailability=Record<string,number>;
 export type RetrievalResult={references:EvidenceReference[];evidence:EvidencePackage;freshnessAssessment:FreshnessAssessment;domainAvailability:DomainAvailability;gaps:string[]};
 
 const stopWords=new Set(["about","after","before","could","does","doing","from","have","into","irish","most","should","that","their","the","this","what","which","with","would","your"]);
+const expansionTerms:Partial<Record<IntelligenceQueryPlan["intent"],string[]>>={
+ market_overview:["strategy","competition","growth","risk","customer","digital","technology","ai","regulation"],
+ company_strategy:["strategy","growth","investment","customer","digital","technology","risk"],
+ company_comparison:["strategy","growth","financial","digital","wealth","customer","technology","ai","risk"],
+ digital_experience:["digital","mobile","online","customer","platform","self service","advice"],
+ ai_transformation:["ai","artificial intelligence","generative ai","genai","agentic","automation","technology"],
+ market_trend:["strategy","growth","market","customer","digital","technology","risk"],
+ strategic_recommendation:["strategy","competition","growth","risk","customer","digital","technology","regulation"],
+};
+
+export function buildRetrievalSearchQuery(question:string,plan:IntelligenceQueryPlan){
+ const organisations=plan.organisations.flatMap(item=>[item.name,item.slug.replaceAll("-"," ")]);
+ return [...new Set([question,...organisations,...plan.products,...plan.regulations,...plan.themes,...(expansionTerms[plan.intent]??[])])].join(" ").slice(0,1000);
+}
+
 export function mergeApprovedEvidenceRows(documentRows:IntelligenceSourceRow[],chunkRows:ApprovedSourceChunkRow[]):IntelligenceSourceRow[]{
-  const rows=new Map(documentRows.map(row=>[row.id,row]));
-  for(const chunk of chunkRows){
+  const rows=new Map(documentRows.map(row=>[row.id,{...row,organisation_names:row.organisation_names??[],passages:row.passages??[]} as IntelligenceSourceRow]));
+  chunkRows.forEach((chunk,index)=>{
     const location=[chunk.section_label,chunk.page_number?`page ${chunk.page_number}`:null].filter(Boolean).join(", ");
     const note=location?`${chunk.chunk_content} (${location})`:chunk.chunk_content;
     const existing=rows.get(chunk.evidence_source_id);
-    rows.set(chunk.evidence_source_id,existing?{...existing,notes:[existing.notes,note].filter(Boolean).join(" ")}:{
+    const passage:EvidencePassage={id:`${chunk.source_item_id}:${index}`,content:chunk.chunk_content,sectionLabel:chunk.section_label,pageNumber:chunk.page_number,relevance:Number(chunk.relevance??0)};
+    rows.set(chunk.evidence_source_id,existing?{...existing,notes:[existing.notes,note].filter(Boolean).join(" "),organisation_names:[...new Set([...(existing.organisation_names??[]),...(chunk.organisation_names??[])])],passages:[...(existing.passages??[]),passage]}:{
       id:chunk.evidence_source_id,title:chunk.title,publisher:chunk.publisher,url:chunk.url,
       publication_date:chunk.publication_date,source_type:chunk.source_type,primary_source:chunk.primary_source,
       credibility_tier:chunk.credibility_tier,evidence_classification:chunk.evidence_classification,notes:note,
+      organisation_names:chunk.organisation_names??[],passages:[passage],
     });
-  }
+  });
   return [...rows.values()];
 }
 export function retrieveFinancialIntelligence(question:string,plan:IntelligenceQueryPlan,rows:IntelligenceSourceRow[],now=new Date(),domainAvailability:DomainAvailability={}):RetrievalResult{
@@ -42,7 +59,8 @@ function scoreRow(row:IntelligenceSourceRow,terms:string[],organisations:string[
   const text=haystack(row);
   const organisationMatches=organisations.filter(name=>text.includes(name)).length;
   if(organisations.length&&organisationMatches===0)return 0;
-  let relevance=terms.filter(term=>text.includes(term)).length*3+organisationMatches*10;
+  const passageRelevance=Math.max(0,...(row.passages??[]).map(passage=>passage.relevance));
+  let relevance=terms.filter(term=>text.includes(term)).length*3+organisationMatches*10+Math.min(passageRelevance*20,8);
   if(["regulatory_question","compliance_question"].includes(plan.intent)&&/(regulatory|legislation|central bank|european union)/i.test(text))relevance+=3;
   if(plan.regulations.some(regulation=>text.includes(regulation.toLocaleLowerCase("en-IE"))))relevance+=10;
   if(plan.intent==="financial_performance"&&/company_results/i.test(row.source_type??""))relevance+=7;
@@ -52,7 +70,13 @@ function scoreRow(row:IntelligenceSourceRow,terms:string[],organisations:string[
   return relevance+(row.primary_source?2:0)+((row.credibility_tier??99)<=2?1:0);
 }
 function tokenise(value:string){return [...new Set(value.toLocaleLowerCase("en-IE").match(/[a-z0-9]{3,}/g)??[])].filter(item=>!stopWords.has(item))}
-function haystack(row:Pick<IntelligenceSourceRow,"title"|"publisher"|"notes"|"source_type"|"evidence_classification">){return [row.title,row.publisher,row.notes,row.source_type,row.evidence_classification].filter(Boolean).join(" ").toLocaleLowerCase("en-IE")}
+function haystack(row:Pick<IntelligenceSourceRow,"title"|"publisher"|"notes"|"source_type"|"evidence_classification"|"organisation_names">){return [row.title,row.publisher,row.notes,row.source_type,row.evidence_classification,...(row.organisation_names??[])].filter(Boolean).join(" ").toLocaleLowerCase("en-IE")}
 function referenceHaystack(row:EvidenceReference){return [row.title,row.publisher,row.claimSupported,row.sourceType,row.classification].filter(Boolean).join(" ").toLocaleLowerCase("en-IE")}
-function toReference(row:IntelligenceSourceRow,index:number):EvidenceReference{return {id:`ref-${index+1}`,sourceId:row.id,title:row.title?.trim()||"Untitled source",publisher:row.publisher?.trim()||"Publisher not recorded",url:row.url!,publicationDate:row.publication_date,sourceType:row.source_type?.trim()||"Source",primary:Boolean(row.primary_source),classification:row.evidence_classification,claimSupported:row.notes?.trim()||"Relevant background evidence",supportStrength:"supporting",rank:index+1}}
+function toReference(row:IntelligenceSourceRow,index:number):EvidenceReference{
+ const passages=[...(row.passages??[])].sort((a,b)=>b.relevance-a.relevance).slice(0,6);
+ const strongest=passages[0];
+ const location=strongest?[strongest.sectionLabel,strongest.pageNumber?`page ${strongest.pageNumber}`:null].filter(Boolean).join(", "):"";
+ const claimSupported=strongest?`${strongest.content}${location?` (${location})`:""}`:row.notes?.trim()||"Relevant background evidence";
+ return {id:`ref-${index+1}`,sourceId:row.id,title:row.title?.trim()||"Untitled source",publisher:row.publisher?.trim()||"Publisher not recorded",url:row.url!,publicationDate:row.publication_date,sourceType:row.source_type?.trim()||"Source",primary:Boolean(row.primary_source),classification:row.evidence_classification,claimSupported,supportStrength:"supporting",rank:index+1,passages};
+}
 function dateValue(value:string|null){const parsed=value?Date.parse(value):0;return Number.isNaN(parsed)?0:parsed}

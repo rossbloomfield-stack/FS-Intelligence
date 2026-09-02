@@ -10,7 +10,7 @@ export function AnalysisAnswer({analysis,evidence,onEvidence,onAsk}:{analysis:In
   {analysis.irishMarketImplication&&<section className="analysis-section"><h3>Irish-market implication</h3><p>{analysis.irishMarketImplication}</p></section>}
   {analysis.counterEvidence.length>0&&<section className="analysis-section analysis-counter"><h3>Counter-evidence and limits</h3><ul>{analysis.counterEvidence.map(item=><li key={item}>{item}</li>)}</ul></section>}
   {analysis.whatToWatch.length>0&&<section className="analysis-section"><h3>What to watch</h3><ul>{analysis.whatToWatch.map(item=><li key={item}>{item}</li>)}</ul></section>}
-  <button type="button" className="evidence-summary" onClick={()=>onEvidence()} disabled={!evidence?.references.length}><FileText size={18}/><span><strong>{confidenceLabel(analysis.confidence)} evidence</strong><small>{evidence?.references.length??0} references · {evidence?.primaryCount??0} primary</small></span><ArrowRight size={18}/></button>
+  <button type="button" className="evidence-summary" onClick={()=>onEvidence()} disabled={!evidence?.references.length}><FileText size={18}/><span><strong>{confidenceLabel(analysis.confidence)} evidence</strong><small>{evidence?.references.length??0} sources · {evidence?.passageCount??evidence?.references.length??0} passages · {evidence?.primaryCount??0} primary</small></span><ArrowRight size={18}/></button>
   <p className="confidence-reason">{analysis.confidenceReason}</p>
   <section className="follow-up-section" aria-labelledby="follow-up-heading"><h3 id="follow-up-heading">Continue the analysis</h3><div>{analysis.followUpQuestions.map(question=><button type="button" key={question} onClick={()=>onAsk(question)}>{question}<ArrowRight size={16}/></button>)}</div></section>
  </div>;

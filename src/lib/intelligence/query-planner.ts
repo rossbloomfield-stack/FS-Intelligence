@@ -25,6 +25,7 @@ export type IntelligenceQueryPlan = {
 const intentRules:Array<[IntelligenceQueryIntent,RegExp]> = [
   ["evidence_request",/\b(evidence|sources?|references?|prove|support)\b/i],
   ["market_overview",/\b(matters most|most important developments?|ceos? should care|executive should know|board should know)\b/i],
+  ["market_overview",/\b(competitors?|peers?)\b.*\b(doing|worried|threat|pressure|risk|changing)\b/i],
   ["product_comparison",/\b(compare|best|strongest)\b.*\b(product|proposition|pension|mortgage|protection|insurance|savings|investment)\b/i],
   ["company_comparison",/\b(compare|versus|vs\.?|which (?:company|bank|insurer|provider|firm))\b/i],
   ["company_strategy",/\b(strategy|strategic direction|growth priorities|investing in)\b/i],

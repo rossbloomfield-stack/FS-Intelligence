@@ -3,8 +3,9 @@ import type { StructuredAnswer } from "@/lib/intelligence/structured-answer";
 
 export type EvidenceConfidence="high"|"medium"|"low"|"insufficient";
 export type EvidenceSupport="supporting"|"counter"|"contextual";
-export type EvidenceReference={id:string;sourceId:string;title:string;publisher:string;url:string;publicationDate:string|null;sourceType:string;primary:boolean;classification:string|null;claimSupported:string;supportStrength:EvidenceSupport;rank:number};
-export type EvidencePackage={confidence:EvidenceConfidence;freshness:"persistent_knowledge"|"persistent_plus_fresh"|"fresh_research";checkedAt:string;references:EvidenceReference[];primaryCount:number};
+export type EvidencePassage={id:string;content:string;sectionLabel:string|null;pageNumber:number|null;relevance:number};
+export type EvidenceReference={id:string;sourceId:string;title:string;publisher:string;url:string;publicationDate:string|null;sourceType:string;primary:boolean;classification:string|null;claimSupported:string;supportStrength:EvidenceSupport;rank:number;passages?:EvidencePassage[]};
+export type EvidencePackage={confidence:EvidenceConfidence;freshness:"persistent_knowledge"|"persistent_plus_fresh"|"fresh_research";checkedAt:string;references:EvidenceReference[];primaryCount:number;passageCount:number};
 export type IntelligenceFinding={title:string;analysis:string;referenceIds:string[]};
 export type IntelligenceAnalysis={
  headline:string;
@@ -29,8 +30,9 @@ export function rankEvidence(rows:SourceRow[]):EvidenceReference[]{
 }
 export function makeEvidencePackage(references:EvidenceReference[],checkedAt=new Date().toISOString()):EvidencePackage{
  const primaryCount=references.filter((item)=>item.primary).length;
+ const passageCount=references.reduce((total,item)=>total+(item.passages?.length??0),0);
  const confidence:EvidenceConfidence=references.length===0?"insufficient":primaryCount>=2&&references.length>=3?"high":primaryCount>=1?"medium":"low";
- return {confidence,freshness:"persistent_knowledge",checkedAt,references,primaryCount};
+ return {confidence,freshness:"persistent_knowledge",checkedAt,references,primaryCount,passageCount};
 }
 export function validateEvidence(references:EvidenceReference[]){
  const seen=new Set<string>();return references.filter((item)=>item.sourceId&&isSafeUrl(item.url)&&!seen.has(item.sourceId)&&seen.add(item.sourceId));

@@ -3706,6 +3706,7 @@ export type Database = {
           credibility_tier: number
           evidence_classification: string | null
           evidence_source_id: string
+          organisation_names: string[]
           page_number: number | null
           primary_source: boolean
           publication_date: string | null
