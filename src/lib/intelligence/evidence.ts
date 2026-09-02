@@ -5,7 +5,22 @@ export type EvidenceConfidence="high"|"medium"|"low"|"insufficient";
 export type EvidenceSupport="supporting"|"counter"|"contextual";
 export type EvidenceReference={id:string;sourceId:string;title:string;publisher:string;url:string;publicationDate:string|null;sourceType:string;primary:boolean;classification:string|null;claimSupported:string;supportStrength:EvidenceSupport;rank:number};
 export type EvidencePackage={confidence:EvidenceConfidence;freshness:"persistent_knowledge"|"persistent_plus_fresh"|"fresh_research";checkedAt:string;references:EvidenceReference[];primaryCount:number};
-export type IntelligenceUIMessage=UIMessage<never,{evidence:EvidencePackage;structuredAnswer:StructuredAnswer}>;
+export type IntelligenceFinding={title:string;analysis:string;referenceIds:string[]};
+export type IntelligenceAnalysis={
+ headline:string;
+ executiveSummary:string;
+ evidenceFindings:IntelligenceFinding[];
+ strategicInterpretation:string|null;
+ irishMarketImplication:string|null;
+ counterEvidence:string[];
+ whatToWatch:string[];
+ confidence:EvidenceConfidence;
+ confidenceReason:string;
+ followUpQuestions:string[];
+ generatedBy:"model"|"fallback";
+};
+export type IntelligenceResearchStatus={stage:"retrieving"|"analysing"|"complete";label:string};
+export type IntelligenceUIMessage=UIMessage<never,{evidence:EvidencePackage;structuredAnswer:StructuredAnswer;analysis:IntelligenceAnalysis;researchStatus:IntelligenceResearchStatus}>;
 
 type SourceRow={id:string;title:string|null;publisher:string|null;url:string|null;publication_date:string|null;source_type:string|null;primary_source:boolean|null;credibility_tier:number|null;evidence_classification:string|null;notes:string|null};
 

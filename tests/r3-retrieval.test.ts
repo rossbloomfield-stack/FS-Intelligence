@@ -36,6 +36,11 @@ describe("R3 query planning",()=>{
   expect(plan.intent).toBe("product_comparison");
   expect(plan.products).toEqual(["mortgage_protection"]);
  });
+ it("recognises executive briefing prompts as market-overview analysis",()=>{
+  const plan=planIntelligenceQuery("What matters most this week?",[]);
+  expect(plan.intent).toBe("market_overview");
+  expect(plan.strategicInterpretationRequired).toBe(true);
+ });
 });
 
 describe("R3 hybrid retrieval gate",()=>{

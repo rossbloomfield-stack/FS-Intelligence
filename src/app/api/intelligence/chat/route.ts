@@ -2,7 +2,8 @@ import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } 
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { isApprovedEmail } from "@/lib/auth/access";
-import { answerForRetrieval } from "@/lib/intelligence/evidence-readiness";
+import { fallbackAnalysis } from "@/lib/intelligence/analysis";
+import { synthesiseIntelligenceAnswer } from "@/lib/intelligence/answer-agent";
 import { type IntelligenceUIMessage } from "@/lib/intelligence/evidence";
 import { attachAliases,resolveOrganisations } from "@/lib/intelligence/entity-resolver";
 import { planIntelligenceQuery } from "@/lib/intelligence/query-planner";
@@ -23,6 +24,7 @@ function logRouteError(error:unknown,requestId:string,stage:string){
  console.error(JSON.stringify({level:"error",message:"Intelligence chat request failed",route:"/api/intelligence/chat",requestId,stage,error:error instanceof Error?error.message:String(error),...details}));
 }
 function messageText(message:UIMessage|undefined){return message?.parts.filter((p):p is Extract<typeof p,{type:"text"}>=>p.type==="text").map(p=>p.text).join("").trim()??"";}
+function userQuestions(messages:UIMessage[]){return messages.filter(message=>message.role==="user").map(message=>messageText(message)).filter(Boolean);}
 export async function POST(request:Request){
  const startedAt=Date.now();
  const requestId=request.headers.get("x-vercel-id")??crypto.randomUUID();
@@ -50,9 +52,12 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const body=parsed.data as {id?:string;messages:IntelligenceUIMessage[]};
  const question=messageText(body.messages.at(-1));
  if(!question||question.length>4000)return Response.json({error:"A valid question is required"},{status:400});
+ const questions=userQuestions(body.messages);
+ const priorQuestions=questions.slice(0,-1);
+ const contextualQuestion=[...priorQuestions.slice(-2),question].join(" ");
  const [sourceResult,chunkResult,organisationResult,aliasResult]=await Promise.all([
-  supabase.from("sources").select("id,title,publisher,url,publication_date,source_type,primary_source,credibility_tier,evidence_classification,notes").eq("approved_public",true).limit(100),
-  supabase.rpc("search_approved_source_chunks",{search_query:question,result_limit:20}),
+  supabase.from("sources").select("id,title,publisher,url,publication_date,source_type,primary_source,credibility_tier,evidence_classification,notes").eq("approved_public",true).order("publication_date",{ascending:false,nullsFirst:false}).limit(250),
+  supabase.rpc("search_approved_source_chunks",{search_query:contextualQuestion,result_limit:30}),
   supabase.from("organisations").select("id,slug,name,sector,jurisdiction").eq("active",true),
   supabase.from("organisation_aliases").select("organisation_id,alias"),
  ]);
@@ -62,15 +67,14 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  assertSupabaseSuccess(aliasResult,"organisation_aliases.select");
  const sourceRows=sourceResult.data;const chunkRows=chunkResult.data;const organisationRows=organisationResult.data;const aliasRows=aliasResult.data;
  const catalogue=attachAliases(organisationRows??[],aliasRows??[]);
- const organisations=resolveOrganisations(question,catalogue);
+ const organisations=resolveOrganisations(contextualQuestion,catalogue);
  const plan=planIntelligenceQuery(question,organisations);
  const domainAvailability=await loadDomainAvailability(supabase,plan.evidenceNeeds);
  const retrievalRows=mergeApprovedEvidenceRows(sourceRows??[],(chunkRows??[]) as ApprovedSourceChunkRow[]);
- const retrieval=retrieveFinancialIntelligence(question,plan,retrievalRows,new Date(),domainAvailability);
+ const retrieval=retrieveFinancialIntelligence(contextualQuestion,plan,retrievalRows,new Date(),domainAvailability);
  const {references,evidence,gaps}=retrieval;
  const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references);
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
- const answer=answerForRetrieval(references,gaps);
  const title=question.length>72?`${question.slice(0,69)}…`:question;
  const conversationId=body.id??crypto.randomUUID();
  const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps},updated_at:new Date().toISOString()},{onConflict:"id"});
@@ -78,7 +82,17 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const userMessageWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"user",content:{text:question},intent:plan.intent});
  assertSupabaseSuccess(userMessageWrite,"conversation_messages.insert_user");
  if(organisations.length){const entityWrite=await supabase.from("conversation_entities").upsert(organisations.map(item=>({conversation_id:conversationId,entity_type:"organisation",entity_id:item.id,entity_label:item.name})),{onConflict:"conversation_id,entity_type,entity_id",ignoreDuplicates:true});assertSupabaseSuccess(entityWrite,"conversation_entities.upsert")}
- const stream=createUIMessageStream<IntelligenceUIMessage>({originalMessages:body.messages,execute:({writer})=>{writer.write({type:"data-evidence",id:"answer-evidence",data:evidence});if(structuredAnswer)writer.write({type:"data-structuredAnswer",id:"answer-structure",data:structuredAnswer});writer.write({type:"text-start",id:"answer"});writer.write({type:"text-delta",id:"answer",delta:answer});writer.write({type:"text-end",id:"answer"});},onEnd:async({responseMessage})=>{try{const assistantWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"assistant",content:responseMessage,confidence:evidence.confidence,freshness:evidence.freshness}).select("id").single();assertSupabaseSuccess(assistantWrite,"conversation_messages.insert_assistant");const stored=assistantWrite.data;if(stored&&references.length){const referenceWrite=await supabase.from("conversation_references").insert(references.map(item=>({conversation_id:conversationId,message_id:stored.id,source_id:item.sourceId,reference_snapshot:item,rank:item.rank,support_strength:item.supportStrength==="supporting"?"direct":item.supportStrength==="counter"?"corroborating":"contextual"})));assertSupabaseSuccess(referenceWrite,"conversation_references.insert")}}catch(error){logRouteError(error,requestId,"stream_on_end")}}});
+ const stream=createUIMessageStream<IntelligenceUIMessage>({originalMessages:body.messages,execute:async({writer})=>{
+  writer.write({type:"data-evidence",id:"answer-evidence",data:evidence});
+  if(structuredAnswer)writer.write({type:"data-structuredAnswer",id:"answer-structure",data:structuredAnswer});
+  writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"analysing",label:references.length?`Analysing ${references.length} approved references…`:"Assessing evidence coverage…"}});
+  let analysis;
+  try{analysis=await synthesiseIntelligenceAnswer({question,conversationContext:priorQuestions,plan,evidence,knowledge:structuredKnowledge})}
+  catch(error){logRouteError(error,requestId,"synthesis");analysis=fallbackAnalysis(evidence)}
+  writer.write({type:"data-analysis",id:"answer-analysis",data:analysis});
+  writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"complete",label:"Analysis complete"}});
+  writer.write({type:"text-start",id:"answer"});writer.write({type:"text-delta",id:"answer",delta:`${analysis.headline}\n\n${analysis.executiveSummary}`});writer.write({type:"text-end",id:"answer"});
+ },onEnd:async({responseMessage})=>{try{const assistantWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"assistant",content:responseMessage,confidence:evidence.confidence,freshness:evidence.freshness}).select("id").single();assertSupabaseSuccess(assistantWrite,"conversation_messages.insert_assistant");const stored=assistantWrite.data;if(stored&&references.length){const referenceWrite=await supabase.from("conversation_references").insert(references.map(item=>({conversation_id:conversationId,message_id:stored.id,source_id:item.sourceId,reference_snapshot:item,rank:item.rank,support_strength:item.supportStrength==="supporting"?"direct":item.supportStrength==="counter"?"corroborating":"contextual"})));assertSupabaseSuccess(referenceWrite,"conversation_references.insert")}}catch(error){logRouteError(error,requestId,"stream_on_end")}}});
  console.log(JSON.stringify({level:"info",message:"Intelligence chat response started",route:"/api/intelligence/chat",requestId,conversationId,durationMs:Date.now()-startedAt,referenceCount:references.length,confidence:evidence.confidence}));
  return createUIMessageStreamResponse({stream,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Request-Id":requestId}});
 }

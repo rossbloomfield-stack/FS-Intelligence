@@ -24,6 +24,7 @@ export type IntelligenceQueryPlan = {
 
 const intentRules:Array<[IntelligenceQueryIntent,RegExp]> = [
   ["evidence_request",/\b(evidence|sources?|references?|prove|support)\b/i],
+  ["market_overview",/\b(matters most|most important developments?|ceos? should care|executive should know|board should know)\b/i],
   ["product_comparison",/\b(compare|best|strongest)\b.*\b(product|proposition|pension|mortgage|protection|insurance|savings|investment)\b/i],
   ["company_comparison",/\b(compare|versus|vs\.?|which (?:company|bank|insurer|provider|firm))\b/i],
   ["company_strategy",/\b(strategy|strategic direction|growth priorities|investing in)\b/i],
@@ -39,7 +40,7 @@ const intentRules:Array<[IntelligenceQueryIntent,RegExp]> = [
   ["future_scenario",/\b(next (?:two|three|five|\d+) years?|future|scenario|could disrupt|what if)\b/i],
   ["strategic_recommendation",/\b(should (?:we|an?|the)|recommend|prioriti[sz]e|what (?:must|should) .* do)\b/i],
   ["market_trend",/\b(trend|changing|changed|momentum|accelerat|weakening|market shift)\b/i],
-  ["market_overview",/\b(market|sector|industry|ceo|executive)\b/i],
+  ["market_overview",/\b(market|sector|industry|ceo|executive|board)\b/i],
 ];
 
 const evidenceByIntent:Record<IntelligenceQueryIntent,string[]> = {
