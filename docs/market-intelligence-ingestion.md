@@ -166,4 +166,10 @@ R5.2 enabled five verified, terms-cleared reporting connectors and 20 readiness-
 
 Ten approved document records that pre-dated `source_items` were promoted using their existing reviewed factual notes. Production therefore contains 15 approved source items and 21 searchable passages. The representative competitor-risk question now retrieves ten passages from eight approved sources after deterministic intent expansion.
 
-The next ingestion increment is a bounded worker for the queued cohort, followed by review and explicit approval. Wider A-grade activation, B-grade discovery and every C-grade target remain disabled.
+## R5.3 execution update
+
+R5.3 adds the bounded worker for the queued cohort. Eligible records are claimed atomically, executed as durable Vercel Workflow runs and persisted idempotently. Fetching is limited to exact approved HTTPS hosts with redirect, time and response-size controls. HTML archives may resolve a target-specific official asset; HTML and PDF parsing retains no raw document and stores at most 24 strategy-relevant passages for review.
+
+Successful parsing does not make evidence searchable. Administrators must inspect the official source, verify the publication date and explicitly approve or reject each item. Approval promotes the item to a citation-ready `sources` record and records an audit event. The existing DST-safe production cron invocations drain two records each, while an authenticated administrator can start five at a time.
+
+Wider A-grade activation, B-grade discovery and every C-grade target remain disabled.

@@ -2979,6 +2979,7 @@ export type Database = {
           run_type: string
           started_at: string | null
           status: string
+          workflow_run_id: string | null
         }
         Insert: {
           attempt?: number
@@ -3000,6 +3001,7 @@ export type Database = {
           run_type: string
           started_at?: string | null
           status: string
+          workflow_run_id?: string | null
         }
         Update: {
           attempt?: number
@@ -3021,6 +3023,7 @@ export type Database = {
           run_type?: string
           started_at?: string | null
           status?: string
+          workflow_run_id?: string | null
         }
         Relationships: [
           {
@@ -3699,6 +3702,22 @@ export type Database = {
         Returns: number
       }
       is_admin: { Args: never; Returns: boolean }
+      claim_source_ingestion_runs: {
+        Args: { p_limit?: number }
+        Returns: { id: string }[]
+      }
+      review_source_item: {
+        Args: {
+          p_decision: string
+          p_item_id: string
+          p_publication_date?: string | null
+          p_reason?: string | null
+        }
+        Returns: {
+          evidence_source_id: string | null
+          review_status: string
+        }[]
+      }
       search_approved_source_chunks: {
         Args: { result_limit?: number; search_query: string }
         Returns: {

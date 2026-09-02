@@ -54,6 +54,8 @@ R5.2 separates the evidence shown to a user from the passages supplied to synthe
 
 Broad executive questions use intent-specific search expansion and may load approved market-wide strategy, financial and digital-capability records without requiring a named organisation. The first production connector cohort enables 20 readiness-A 2025 reporting targets across five verified, terms-cleared sources. These create bounded verification work only: approval remains mandatory before discovered evidence can enter conversation.
 
+R5.3 executes that work with one durable workflow per reference target. Atomic queue claiming prevents duplicate workers; step-level fetch, parsing and persistence are independently retryable. Exact-host SSRF controls, response limits and bounded passage selection keep ingestion safe and rights-aware. Parsed items remain isolated behind RLS until an administrator verifies their publication date and invokes the audited approval operation.
+
 ## Evaluation
 
 R1 tests access allowlisting and empty-corpus behavior. R2 tests evidence ranking and citation safety. R3 tests alias resolution, multi-company planning, structured evidence needs, relevance filtering, freshness escalation and insufficient-evidence behaviour. Later releases expand this into 200 cross-intent questions and approximately 30 golden questions covering time validity, primary-source preference, citation validity, unsupported figures, follow-up context and regulatory disclaimers.
