@@ -26,9 +26,21 @@ describe("contextual intelligence synthesis",()=>{
 
  it("uses one focused conversation surface and evidence on demand",()=>{
   const client=readFileSync(join(process.cwd(),"src/components/intelligence-chat/intelligence-chat.tsx"),"utf8");
-  expect(client).toContain("What do you want to know about the market?");
+  expect(client).toContain("What would you like to understand about the market?");
   expect(client).not.toContain("conversation-context");
   expect(client).toContain("selectedReferenceId");
+ });
+
+ it("applies the Irish Life design language without weakening the conversation",()=>{
+  const shell=readFileSync(join(process.cwd(),"src/components/intelligence/shell.tsx"),"utf8");
+  const client=readFileSync(join(process.cwd(),"src/components/intelligence-chat/intelligence-chat.tsx"),"utf8");
+  const styles=readFileSync(join(process.cwd(),"src/app/globals.css"),"utf8");
+  expect(shell).toContain("/brand/irish-life-logo.svg");
+  expect(shell).toContain("Irish Life Market Intelligence home");
+  expect(client).toContain('accent:"teal"');
+  expect(styles).toContain(".prompt-grid .prompt-card-teal");
+  expect(styles).toContain("Irish Life Market Intelligence — conversational product surface");
+  expect(styles).toContain('font-family:"Assistant"');
  });
 
  it("routes retrieved evidence through contextual model synthesis",()=>{
