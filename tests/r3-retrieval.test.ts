@@ -41,6 +41,13 @@ describe("R3 query planning",()=>{
   expect(plan.intent).toBe("market_overview");
   expect(plan.strategicInterpretationRequired).toBe(true);
  });
+ it("recognises the daily briefing and requires current evidence",()=>{
+  const plan=planIntelligenceQuery("What are today's most relevant financial-services developments for an Irish CEO, ranked by strategic importance?",[]);
+  expect(plan.intent).toBe("market_overview");
+  expect(plan.timeframe.label).toBe("today");
+  expect(plan.dailyBriefingRequested).toBe(true);
+  expect(plan.freshVerificationRequired).toBe(true);
+ });
  it("expands broad executive questions into evidence-domain search terms",()=>{
   const plan=planIntelligenceQuery("What are my competitors doing that I should be worried about?",[]);
   const query=buildRetrievalSearchQuery("What are my competitors doing that I should be worried about?",plan);
@@ -79,6 +86,18 @@ describe("R3 hybrid retrieval gate",()=>{
   expect(result.references).toHaveLength(1);
   expect(result.references[0].passages).toHaveLength(2);
   expect(result.evidence.passageCount).toBe(2);
+ });
+ it("does not present old approved evidence as today's briefing",()=>{
+  const plan=planIntelligenceQuery("Give me today's daily briefing",[]);
+  const result=retrieveFinancialIntelligence("Give me today's daily briefing",plan,sources,new Date("2026-09-03T09:00:00Z"));
+  expect(result.references).toHaveLength(0);
+  expect(result.gaps).toContain("No approved evidence was published in the current daily briefing window.");
+ });
+ it("ranks current approved evidence for a daily briefing",()=>{
+  const plan=planIntelligenceQuery("Give me today's most relevant market news",[]);
+  const current=[...sources,{id:"daily-source",title:"Irish financial services market update",publisher:"Primary publisher",url:"https://publisher.example/update",publication_date:"2026-09-03",source_type:"company_results",primary_source:true,credibility_tier:1,evidence_classification:"primary_company",notes:"Strategy, growth, customer, digital and regulation developments."}];
+  const result=retrieveFinancialIntelligence("Give me today's most relevant market news",plan,current,new Date("2026-09-03T09:00:00Z"));
+  expect(result.references.map(item=>item.sourceId)).toEqual(["daily-source"]);
  });
 });
 

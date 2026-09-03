@@ -2,7 +2,7 @@
 import { FormEvent,KeyboardEvent,useCallback,useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { ArrowRight,BriefcaseBusiness,Building2,Cpu,Landmark,LockKeyhole,Plus,Scale,Send,Square,Telescope,type LucideIcon } from "lucide-react";
+import { ArrowRight,BriefcaseBusiness,Building2,Cpu,LockKeyhole,Newspaper,Plus,Scale,Send,Square,Telescope,type LucideIcon } from "lucide-react";
 import { Conversation } from "@/components/ai-elements/conversation";
 import { Message } from "@/components/ai-elements/message";
 import { EvidencePanel } from "@/components/intelligence-chat/evidence-panel";
@@ -10,10 +10,10 @@ import type { EvidencePackage,IntelligenceUIMessage } from "@/lib/intelligence/e
 
 type StarterPrompt={label:string;question:string;accent:"blue"|"teal"|"purple"|"coral";icon:LucideIcon};
 const prompts:StarterPrompt[]=[
+ {label:"Today's briefing",question:"What are today's most relevant financial-services developments for an Irish CEO, ranked by strategic importance?",accent:"coral",icon:Newspaper},
  {label:"CEO brief",question:"What are the three developments Irish financial-services CEOs should care about most right now?",accent:"blue",icon:BriefcaseBusiness},
  {label:"Competitive momentum",question:"Which competitors are gaining strategic momentum, and why?",accent:"teal",icon:Building2},
  {label:"AI and transformation",question:"What are Irish financial-services firms doing with AI in production?",accent:"purple",icon:Cpu},
- {label:"Market change",question:"What has materially changed in Irish financial services in the last 30 days?",accent:"coral",icon:Landmark},
  {label:"Regulation",question:"Which regulatory developments should a CEO care about this quarter?",accent:"teal",icon:Scale},
  {label:"Forward view",question:"What could disrupt the Irish financial-services market over the next three years?",accent:"purple",icon:Telescope},
 ];

@@ -20,6 +20,7 @@ export type IntelligenceQueryPlan = {
   strategicInterpretationRequired:boolean;
   evidenceNeeds:string[];
   freshVerificationRequired:boolean;
+  dailyBriefingRequested:boolean;
 };
 
 const intentRules:Array<[IntelligenceQueryIntent,RegExp]> = [
@@ -64,8 +65,9 @@ export function planIntelligenceQuery(question:string,organisations:ResolvedOrga
   const regulations=matches(question,["Consumer Protection Code","DORA","FIDA","AI Act"]);
   const products=extractProducts(question);
   const themes=matches(question,["agentic AI","open finance","digital advice","operational resilience","financial wellbeing","personalisation"]);
+  const dailyBriefingRequested=/\b(?:daily briefing|today(?:'s|’s)?\b.{0,100}\b(?:news|briefing|developments?)|news today|most relevant (?:market )?news)\b/i.test(question);
   const freshVerificationRequired=timeframe.currentInformationRequired||intent==="regulatory_question"||intent==="compliance_question";
-  return {intent,organisations,sectors:[...new Set(organisations.map(item=>item.sector))],products,jurisdictions:[...new Set(organisations.map(item=>item.jurisdiction).filter((v):v is string=>Boolean(v)))],regulations,themes,timeframe,comparisonRequested,strategicInterpretationRequired:["company_strategy","company_comparison","future_scenario","strategic_recommendation","market_overview"].includes(intent),evidenceNeeds:evidenceByIntent[intent],freshVerificationRequired};
+  return {intent,organisations,sectors:[...new Set(organisations.map(item=>item.sector))],products,jurisdictions:[...new Set(organisations.map(item=>item.jurisdiction).filter((v):v is string=>Boolean(v)))],regulations,themes,timeframe,comparisonRequested,strategicInterpretationRequired:["company_strategy","company_comparison","future_scenario","strategic_recommendation","market_overview"].includes(intent),evidenceNeeds:evidenceByIntent[intent],freshVerificationRequired,dailyBriefingRequested};
 }
 
 function parseTimeframe(question:string):QueryTimeframe{
