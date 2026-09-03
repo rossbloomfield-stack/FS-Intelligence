@@ -8,7 +8,7 @@ Zurich and Aviva are excluded because their listings currently reject the bounde
 
 ## Flow
 
-1. the existing DST-safe cron requests one discovery run per approved connector and Dublin date;
+1. a dedicated DST-safe cron requests one discovery run per approved connector and Dublin date;
 2. `claim_source_discovery_runs` prevents duplicate same-day runs;
 3. a durable Workflow run fetches the approved listing or feed with redirect, size, timeout and host controls;
 4. RSS/Atom or HTML links are normalised, deduplicated, filtered by connector-specific path and exclusion rules, and ranked by date and strategic relevance;

@@ -186,9 +186,10 @@ them ahead of the older verification backlog.
 Discovery and ingestion still do not publish evidence. Parsed items remain
 unavailable to conversational retrieval until an administrator checks the
 official source and publication date and explicitly approves them. The existing
-production cron starts discovery inside the Dublin 08:00 schedule window and
-drains a small ingestion batch on each authenticated invocation; weekly report
-generation remains restricted to the same DST-safe reporting window.
+dedicated production discovery cron runs inside the Dublin 08:00 schedule
+window, while the existing weekly endpoint drains a small ingestion batch on
+each authenticated invocation. Both routes use the existing secret and DST-safe
+dual UTC schedule.
 
 Zurich, Aviva and Great-West Lifeco remain fixed-target sources because their current
 listing pages do not provide a stable, server-readable discovery surface. No
