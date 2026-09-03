@@ -21,6 +21,16 @@ export function fallbackAnalysis(evidence:EvidencePackage):IntelligenceAnalysis{
  };
 }
 
+export function unavailableDailyBriefingAnalysis(evidence:EvidencePackage):IntelligenceAnalysis{return {
+ headline:"No verified daily developments are available yet.",
+ executiveSummary:"Nothing published within the current briefing window has completed verification. Older material has not been presented as today's news.",
+ evidenceFindings:[],strategicInterpretation:null,irishMarketImplication:null,
+ counterEvidence:["Current coverage is insufficient for a reliable daily ranking."],
+ whatToWatch:["This briefing will update as new monitored sources complete verification."],confidence:evidence.confidence,
+ confidenceReason:"No verified reference falls within the current daily briefing window.",
+ followUpQuestions:["What are the most important developments in the latest verified evidence?","Which sources are currently monitored?"],generatedBy:"fallback",
+};}
+
 function insufficientAnalysis(evidence:EvidencePackage):IntelligenceAnalysis{return {
  headline:"There is not enough approved evidence to answer this reliably.",
  executiveSummary:"The current evidence store does not contain a sufficiently direct, verified match for this question. I have not substituted a plausible-sounding answer for missing evidence.",

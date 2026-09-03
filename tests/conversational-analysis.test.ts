@@ -5,7 +5,7 @@ import {fireEvent,render,screen} from "@testing-library/react";
 import {createElement,Fragment,useState} from "react";
 import {AnalysisAnswer} from "@/components/intelligence-chat/analysis-answer";
 import {EvidencePanel} from "@/components/intelligence-chat/evidence-panel";
-import {fallbackAnalysis,normaliseAnalysis} from "@/lib/intelligence/analysis";
+import {fallbackAnalysis,normaliseAnalysis,unavailableDailyBriefingAnalysis} from "@/lib/intelligence/analysis";
 import {makeEvidencePackage,type EvidenceReference} from "@/lib/intelligence/evidence";
 
 const reference:EvidenceReference={id:"ref-1",sourceId:"source-1",title:"Official results",publisher:"AIB",url:"https://aib.example/results",publicationDate:"2026-08-01",sourceType:"company_results",primary:true,classification:"primary_company",claimSupported:"AIB reported a verified strategic update.",supportStrength:"supporting",rank:1};
@@ -22,6 +22,13 @@ describe("contextual intelligence synthesis",()=>{
   const answer=fallbackAnalysis(makeEvidencePackage([]));
   expect(answer.confidence).toBe("insufficient");
   expect(answer.headline).toContain("not enough approved evidence");
+ });
+
+ it("explains an empty daily briefing without relabelling old evidence",()=>{
+  const answer=unavailableDailyBriefingAnalysis(makeEvidencePackage([]));
+  expect(answer.headline).toContain("No verified daily developments");
+  expect(answer.executiveSummary).toContain("Older material has not been presented as today's news");
+  expect(answer.confidence).toBe("insufficient");
  });
 
  it("uses one focused conversation surface and evidence on demand",()=>{

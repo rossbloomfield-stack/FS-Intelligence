@@ -2,7 +2,7 @@ import "server-only";
 import { openai } from "@ai-sdk/openai";
 import { generateText,Output } from "ai";
 import { z } from "zod";
-import { fallbackAnalysis,normaliseAnalysis } from "@/lib/intelligence/analysis";
+import { fallbackAnalysis,normaliseAnalysis,unavailableDailyBriefingAnalysis } from "@/lib/intelligence/analysis";
 import type { EvidencePackage,EvidenceReference,IntelligenceAnalysis } from "@/lib/intelligence/evidence";
 import type { IntelligenceQueryPlan } from "@/lib/intelligence/query-planner";
 import type { StructuredKnowledge } from "@/lib/intelligence/structured-answer";
@@ -26,7 +26,7 @@ const synthesisSchema=z.object({
 });
 
 export async function synthesiseIntelligenceAnswer({question,conversationContext,plan,evidence,knowledge}:{question:string;conversationContext:string[];plan:IntelligenceQueryPlan;evidence:EvidencePackage;knowledge:StructuredKnowledge}):Promise<IntelligenceAnalysis>{
- if(!evidence.references.length)return fallbackAnalysis(evidence);
+ if(!evidence.references.length)return plan.dailyBriefingRequested?unavailableDailyBriefingAnalysis(evidence):fallbackAnalysis(evidence);
  if(!process.env.OPENAI_API_KEY)throw new Error("OPENAI_API_KEY is not configured for intelligence synthesis.");
  const modelId=process.env.INTELLIGENCE_MODEL?.trim()||"gpt-5.4-mini";
  const result=await generateText({
