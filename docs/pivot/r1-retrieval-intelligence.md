@@ -107,6 +107,7 @@ Conversation context is preserved by including the previous two user questions i
 | `src/components/intelligence-chat/evidence-panel.tsx` | Small evidence-footprint addition; no conversational redesign. |
 | `evals/r1-retrieval-questions.ts` | Thirty-six cross-intent R1 evaluation questions. |
 | `tests/r1-retrieval-intelligence.test.ts` | Automated query, fusion, deduplication, diversity, recency, citation and migration tests. |
+| `tests/r1-retrieval-live.test.ts` | Opt-in 36-question production-corpus comparison; runs only when the required protected environment values are supplied. |
 
 ## Database changes
 
@@ -146,6 +147,8 @@ All values have bounded defaults and can be changed in the Vercel environment wi
 
 The repeatable R1 suite contains 36 questions across factual, comparative, trend, broad strategic, entity investigation, technology, regulatory and contradictory-evidence categories. All questions assert expected intent, recency behaviour and bounded decomposition. The automated tests also exercise both retrieval channels, fusion, exact duplicate removal, near-duplicate handling, authority ranking, source caps, timeframe restrictions, empty evidence, confidence grading and citation lineage.
 
+Run the deterministic suite with `pnpm test:r1-retrieval`. The opt-in live corpus runner is `pnpm eval:r1-live`; it intentionally fails closed unless the Supabase service credential and OpenAI key are injected by an authorised local or CI environment. Protected Vercel values are not copied into the repository.
+
 The controlled before/after ranking fixture deliberately models the previous failure mode—three of the top five lexical passages come from one annual report—while exposing relevant semantic and independent-source candidates to R1.
 
 | Metric | Previous top-match path | R1 hybrid path |
@@ -162,7 +165,7 @@ This is a deterministic retrieval benchmark, not a claim that a 36-question mode
 
 Verification at release:
 
-- 17 test files and 119 tests passed;
+- 17 test files and 119 tests passed; the separate protected-environment live runner is skipped in normal CI;
 - 47 tests are specific to R1, including all 36 evaluation questions;
 - TypeScript, ESLint and the production Next.js build passed;
 - the production migration was verified with an approved lexical probe;
@@ -176,3 +179,13 @@ Verification at release:
 - Historical production retrieval averages were not logged before R1. R1 establishes the baseline needed for ongoing comparison.
 - Citation validity and source-ID lineage are automated. Human review of nuanced claim support remains appropriate for high-stakes regulatory and strategic answers.
 - Fresh external research remains outside this release. Questions requiring information not present in the approved corpus are labelled Limited or Insufficient rather than filled from unapproved web material.
+
+## Production verification — 3 September 2026
+
+- Supabase migrations `20260903214020` and `20260903214111` are applied.
+- The approved-only lexical probe returned 14 relevant passages for “digital advice strategy Ireland”.
+- The semantic RPC executed successfully against the live schema. At deployment time, 21 approved chunks were eligible for embedding; existing approved chunks are populated on the first authenticated semantic request and maintained after approval and daily discovery.
+- Vercel deployment `dpl_CgvcCXRbGHKim8Y3LRZuQJb2nRs9` reached `READY` and aliases include both `www.rossbloomfield.com` and `rossbloomfield.com`.
+- Both production domains redirect unauthenticated `/intelligence` traffic to the existing Irish Life login page and return HTTP 200 there.
+- Unauthenticated chat requests return HTTP 401; authentication was not bypassed for testing.
+- Vercel reported no production runtime errors in the post-deployment verification window.
