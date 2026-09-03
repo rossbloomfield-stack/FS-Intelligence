@@ -29,6 +29,23 @@ describe("official-source discovery", () => {
     ]);
   });
 
+  it("normalises regulator feed dates that include an editorial time separator", () => {
+    const feed = `
+      <rss><channel><item>
+        <title>Young investors trust AI more than TV or celebrities</title>
+        <link>https://www.fca.org.uk/news/press-releases/young-investors-trust-ai-more-tv-or-celebrities</link>
+        <pubDate>Thursday, August 27, 2026 - 10:00</pubDate>
+      </item></channel></rss>`;
+
+    expect(
+      extractDiscoveryLinks(
+        feed,
+        "https://www.fca.org.uk/news/rss.xml",
+        "application/rss+xml",
+      )[0]?.publicationDate,
+    ).toBe("2026-08-27");
+  });
+
   it("keeps only allowed, material links and excludes routine notices", () => {
     const html = `
       <a href="/content/dam/frontdoor/investorrelations/docs/se-announcements/2026/aib-interim-results-2026.pdf">

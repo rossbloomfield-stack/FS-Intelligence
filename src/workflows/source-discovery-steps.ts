@@ -127,7 +127,10 @@ export async function discoverSourceCandidates(
   const candidates = selectDiscoveryCandidates(links, {
     includePaths: context.includePaths,
     excludeTerms: context.excludeTerms,
-    maxItems: context.maxItems,
+    // Keep a wider bounded pool so previously seen top-ranked links do not
+    // prevent a new publication lower in the official listing from reaching
+    // the connector's daily new-item ceiling.
+    maxItems: Math.min(context.maxItems * 4, 40),
     discoveryDate: context.discoveryDate,
   });
   return { candidates, bytesFetched: fetched.body.byteLength };
@@ -168,8 +171,13 @@ export async function persistDiscoveredSources(
     ...(itemsResult.data ?? []).map((item) => item.canonical_url),
   ]);
   let queuedCount = 0;
+  let duplicateCount = 0;
   for (const candidate of candidates) {
-    if (existing.has(candidate.canonicalUrl)) continue;
+    if (existing.has(candidate.canonicalUrl)) {
+      duplicateCount += 1;
+      continue;
+    }
+    if (queuedCount >= context.maxItems) break;
     const digest = sha256(candidate.canonicalUrl);
     const referenceKey = `DISC-${context.sourceKey}-${digest.slice(0, 16).toUpperCase()}`;
     const format = candidate.canonicalUrl
@@ -232,31 +240,28 @@ export async function persistDiscoveredSources(
       throw new Error(
         `Could not persist discovered target: ${targetError?.message ?? "unknown error"}`,
       );
-    const { error: runError } = await db
-      .from("source_ingestion_runs")
-      .upsert(
-        {
-          execution_key: `r5.4:item:${digest}`,
-          connector_id: context.connectorId,
-          reference_target_id: target.id,
-          run_type: "target",
-          status: "queued",
-          metadata: {
-            release: "R5.4",
-            scope: "daily official-source discovery",
-            discoveryRunId: context.runId,
-            discoveredPublicationDate: candidate.publicationDate,
-            approvalRequiredBeforeRetrieval: true,
-          },
+    const { error: runError } = await db.from("source_ingestion_runs").upsert(
+      {
+        execution_key: `r5.4:item:${digest}`,
+        connector_id: context.connectorId,
+        reference_target_id: target.id,
+        run_type: "target",
+        status: "queued",
+        metadata: {
+          release: "R5.4",
+          scope: "daily official-source discovery",
+          discoveryRunId: context.runId,
+          discoveredPublicationDate: candidate.publicationDate,
+          approvalRequiredBeforeRetrieval: true,
         },
-        { onConflict: "execution_key", ignoreDuplicates: true },
-      );
+      },
+      { onConflict: "execution_key", ignoreDuplicates: true },
+    );
     if (runError)
       throw new Error(`Could not queue discovered target: ${runError.message}`);
     queuedCount += 1;
     existing.add(candidate.canonicalUrl);
   }
-  const duplicateCount = candidates.length - queuedCount;
   const now = new Date().toISOString();
   await db
     .from("source_ingestion_runs")
@@ -327,16 +332,14 @@ export async function failSourceDiscoveryRun(runId: string, message: string) {
     })
     .eq("id", runId)
     .throwOnError();
-  await db
-    .from("source_ingestion_failures")
-    .insert({
-      run_id: runId,
-      source_url: null,
-      stage: "source_discovery",
-      error_code: blocked ? "DISCOVERY_BLOCKED" : "DISCOVERY_FAILED",
-      error_message: message.slice(0, 2000),
-      retryable: !blocked,
-    });
+  await db.from("source_ingestion_failures").insert({
+    run_id: runId,
+    source_url: null,
+    stage: "source_discovery",
+    error_code: blocked ? "DISCOVERY_BLOCKED" : "DISCOVERY_FAILED",
+    error_message: message.slice(0, 2000),
+    retryable: !blocked,
+  });
   if (run?.connector_id) {
     const { data: connector } = await db
       .from("source_connectors")

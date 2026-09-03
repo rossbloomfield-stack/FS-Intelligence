@@ -2,9 +2,9 @@
 
 ## Outcome
 
-R5.4 turns the controlled target queue into a small recurring discovery loop for current official publications. It does not enable broad crawling and it does not auto-publish evidence. The initial production cohort is Central Bank of Ireland, AIB, Bank of Ireland and Aviva. Each connector has an exact listing/feed URL, same-host allow-list, required path fragments, excluded routine notices and a daily item ceiling.
+R5.4 turns the controlled target queue into a small recurring discovery loop for current official publications. It does not enable broad crawling and it does not auto-publish evidence. The initial production cohort is Central Bank of Ireland, the Financial Conduct Authority, AIB and Bank of Ireland. Each connector has an exact listing/feed URL, same-host allow-list, required path fragments, excluded routine notices and a daily item ceiling.
 
-Zurich is excluded because its listing currently returns an access challenge. Great-West Lifeco is excluded because its listing does not expose stable server-rendered publication links. Both remain available for their existing fixed reporting targets.
+Zurich and Aviva are excluded because their listings currently reject the bounded server-side client. Great-West Lifeco is excluded because its listing does not expose stable server-rendered publication links. All three remain available for their existing fixed reporting targets.
 
 ## Flow
 

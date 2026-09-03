@@ -98,7 +98,7 @@ export function selectDiscoveryCandidates(
         (b.publicationDate ?? "").localeCompare(a.publicationDate ?? "") ||
         a.canonicalUrl.localeCompare(b.canonicalUrl),
     )
-    .slice(0, Math.max(1, Math.min(options.maxItems, 12)));
+    .slice(0, Math.max(1, Math.min(options.maxItems, 40)));
 }
 
 function extractFeedLinks(xml: string, baseUrl: string) {
@@ -120,7 +120,7 @@ function extractFeedLinks(xml: string, baseUrl: string) {
             new URL(decodeXml(rawLink), baseUrl).toString(),
           ),
           title,
-          publicationDate: normaliseDate(
+          publicationDate: normaliseFeedDate(
             textValue(entry, "pubDate") ||
               textValue(entry, "published") ||
               textValue(entry, "updated"),
@@ -147,6 +147,13 @@ function textValue(value: string, tag: string) {
 }
 function decodeXml(value: string) {
   return stripHtml(value).replace(/\s+/g, " ").trim();
+}
+
+function normaliseFeedDate(value: string) {
+  return (
+    normaliseDate(value) ??
+    normaliseDate(value.replace(/\s+-\s+(\d{1,2}:\d{2})$/, " $1"))
+  );
 }
 
 function inferPublicationDate(value: string, referenceDate?: string) {

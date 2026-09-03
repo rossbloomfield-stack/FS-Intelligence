@@ -177,7 +177,7 @@ Wider A-grade activation, B-grade discovery and every C-grade target remain disa
 ## R5.4 daily discovery update
 
 R5.4 adds one bounded daily discovery pass over four verified official listings:
-Central Bank of Ireland, AIB, Bank of Ireland and Aviva. Discovery is a separate
+Central Bank of Ireland, the Financial Conduct Authority, AIB and Bank of Ireland. Discovery is a separate
 connector permission and is constrained by exact HTTPS hosts, configured path
 allowlists, routine-notice exclusions, response-size limits and per-source item
 ceilings. A successful pass creates idempotent readiness-A targets and queues
@@ -190,6 +190,6 @@ production cron starts discovery inside the Dublin 08:00 schedule window and
 drains a small ingestion batch on each authenticated invocation; weekly report
 generation remains restricted to the same DST-safe reporting window.
 
-Zurich and Great-West Lifeco remain fixed-target sources because their current
+Zurich, Aviva and Great-West Lifeco remain fixed-target sources because their current
 listing pages do not provide a stable, server-readable discovery surface. No
 broad crawler, B-grade activation or C-grade activation is included in R5.4.
