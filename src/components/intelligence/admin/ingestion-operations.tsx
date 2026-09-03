@@ -1,12 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import type { IngestionOperationsStatus, IngestionReviewItem } from "@/schemas/source-ingestion";
+import type {
+  IngestionOperationsStatus,
+  IngestionReviewItem,
+} from "@/schemas/source-ingestion";
 
-export function IngestionOperations({ initialStatus }: { initialStatus: IngestionOperationsStatus }) {
+export function IngestionOperations({
+  initialStatus,
+}: {
+  initialStatus: IngestionOperationsStatus;
+}) {
   const [status, setStatus] = useState(initialStatus);
   const [dates, setDates] = useState<Record<string, string>>(() =>
-    Object.fromEntries(initialStatus.pendingItems.map((item) => [item.id, item.publication_date ?? ""])),
+    Object.fromEntries(
+      initialStatus.pendingItems.map((item) => [
+        item.id,
+        item.publication_date ?? "",
+      ]),
+    ),
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -17,31 +29,47 @@ export function IngestionOperations({ initialStatus }: { initialStatus: Ingestio
     const next = (await response.json()) as IngestionOperationsStatus;
     setStatus(next);
     setDates((current) =>
-      Object.fromEntries(next.pendingItems.map((item) => [item.id, current[item.id] ?? item.publication_date ?? ""])),
+      Object.fromEntries(
+        next.pendingItems.map((item) => [
+          item.id,
+          current[item.id] ?? item.publication_date ?? "",
+        ]),
+      ),
     );
   }
 
-  async function startQueue() {
-    setBusy("start");
+  async function startOperation(action: "ingest" | "discover") {
+    setBusy(action);
     setMessage(null);
     try {
       const response = await fetch("/api/admin/ingestion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit: 5 }),
+        body: JSON.stringify({ action, limit: action === "discover" ? 4 : 5 }),
       });
-      const result = (await response.json()) as { started?: unknown[]; error?: string };
-      if (!response.ok) throw new Error(result.error ?? "Could not start ingestion");
-      setMessage(`${result.started?.length ?? 0} bounded ingestion workflows started.`);
+      const result = (await response.json()) as {
+        started?: unknown[];
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(result.error ?? "Could not start ingestion");
+      setMessage(
+        `${result.started?.length ?? 0} ${action === "discover" ? "official-source discovery" : "bounded ingestion"} workflows started.`,
+      );
       await refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not start ingestion");
+      setMessage(
+        error instanceof Error ? error.message : "Could not start ingestion",
+      );
     } finally {
       setBusy(null);
     }
   }
 
-  async function review(item: IngestionReviewItem, decision: "approve" | "reject") {
+  async function review(
+    item: IngestionReviewItem,
+    decision: "approve" | "reject",
+  ) {
     if (decision === "approve" && !dates[item.id]) {
       setMessage("Enter and verify the publication date before approval.");
       return;
@@ -56,15 +84,25 @@ export function IngestionOperations({ initialStatus }: { initialStatus: Ingestio
           itemId: item.id,
           decision,
           publicationDate: dates[item.id] || null,
-          reason: decision === "reject" ? "Rejected by administrator during corpus review" : null,
+          reason:
+            decision === "reject"
+              ? "Rejected by administrator during corpus review"
+              : null,
         }),
       });
       const result = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(result.error ?? "Could not review source item");
-      setMessage(decision === "approve" ? "Evidence approved for conversational retrieval." : "Evidence rejected.");
+      if (!response.ok)
+        throw new Error(result.error ?? "Could not review source item");
+      setMessage(
+        decision === "approve"
+          ? "Evidence approved for conversational retrieval."
+          : "Evidence rejected.",
+      );
       await refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not review source item");
+      setMessage(
+        error instanceof Error ? error.message : "Could not review source item",
+      );
     } finally {
       setBusy(null);
     }
@@ -74,51 +112,108 @@ export function IngestionOperations({ initialStatus }: { initialStatus: Ingestio
     <section className="mt-10" aria-labelledby="corpus-operations-heading">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold tracking-[0.16em] text-[var(--teal)]">R5.3 CORPUS OPERATIONS</p>
-          <h2 id="corpus-operations-heading" className="mt-2 text-2xl font-semibold text-[var(--ink)]">
+          <p className="text-xs font-semibold tracking-[0.16em] text-[var(--teal)]">
+            R5.4 CORPUS OPERATIONS
+          </p>
+          <h2
+            id="corpus-operations-heading"
+            className="mt-2 text-2xl font-semibold text-[var(--ink)]"
+          >
             Evidence ingestion and review
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-            Fetch-approved targets are processed into bounded passages. Nothing becomes available to conversation until an administrator verifies the source and publication date.
+            Fetch-approved targets are processed into bounded passages. Nothing
+            becomes available to conversation until an administrator verifies
+            the source and publication date.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={startQueue}
-          disabled={busy !== null}
-          className="min-h-11 rounded-lg bg-[var(--purple)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy === "start" ? "Starting…" : "Process next five"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => startOperation("discover")}
+            disabled={busy !== null}
+            className="min-h-11 rounded-lg border border-[var(--purple)] bg-white px-5 py-2 text-sm font-semibold text-[var(--purple)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy === "discover" ? "Discovering…" : "Discover latest sources"}
+          </button>
+          <button
+            type="button"
+            onClick={() => startOperation("ingest")}
+            disabled={busy !== null}
+            className="min-h-11 rounded-lg bg-[var(--purple)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy === "ingest" ? "Starting…" : "Process next five"}
+          </button>
+        </div>
       </div>
 
-      {message ? <p className="mt-4 rounded-lg border border-[var(--line)] bg-white p-3 text-sm" role="status">{message}</p> : null}
+      {message ? (
+        <p
+          className="mt-4 rounded-lg border border-[var(--line)] bg-white p-3 text-sm"
+          role="status"
+        >
+          {message}
+        </p>
+      ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Metric label="Approved documents" value={status.approvedSourceItems} />
         <Metric label="Stored passages" value={status.storedPassages} />
         <Metric label="Enabled targets" value={status.enabledTargets} />
         <Metric label="Awaiting review" value={status.pendingItems.length} />
+        <Metric
+          label="Daily sources"
+          value={status.discoveryEnabledConnectors}
+        />
+        <Metric label="Discovered targets" value={status.discoveredTargets} />
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2 text-xs text-[var(--muted)]" aria-label="Ingestion run status">
+      <p className="mt-3 text-xs text-[var(--muted)]">
+        Last successful discovery:{" "}
+        {status.lastDiscoverySucceededAt
+          ? new Intl.DateTimeFormat("en-IE", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(new Date(status.lastDiscoverySucceededAt))
+          : "Not yet run"}
+      </p>
+
+      <div
+        className="mt-6 flex flex-wrap gap-2 text-xs text-[var(--muted)]"
+        aria-label="Ingestion run status"
+      >
         {Object.entries(status.statusCounts).map(([label, value]) => (
-          <span key={label} className="rounded-full border border-[var(--line)] bg-white px-3 py-1.5">
-            <span className="capitalize">{label}</span>: <strong className="text-[var(--ink)]">{value}</strong>
+          <span
+            key={label}
+            className="rounded-full border border-[var(--line)] bg-white px-3 py-1.5"
+          >
+            <span className="capitalize">{label}</span>:{" "}
+            <strong className="text-[var(--ink)]">{value}</strong>
           </span>
         ))}
       </div>
 
       <div className="mt-8 space-y-4">
         {status.pendingItems.map((item) => (
-          <article key={item.id} className="rounded-xl border border-[var(--line)] bg-white p-5">
+          <article
+            key={item.id}
+            className="rounded-xl border border-[var(--line)] bg-white p-5"
+          >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--teal)]">
-                  {item.reference_targets?.reference_key ?? "Evidence item"} · {item.content_type}
+                  {item.reference_targets?.reference_key ?? "Evidence item"} ·{" "}
+                  {item.content_type}
                 </p>
-                <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{item.title}</h3>
-                <a className="mt-2 block break-all text-sm text-[var(--purple)] underline" href={item.canonical_url} target="_blank" rel="noreferrer">
+                <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                  {item.title}
+                </h3>
+                <a
+                  className="mt-2 block break-all text-sm text-[var(--purple)] underline"
+                  href={item.canonical_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   Open official source
                 </a>
               </div>
@@ -128,7 +223,12 @@ export function IngestionOperations({ initialStatus }: { initialStatus: Ingestio
                   <input
                     type="date"
                     value={dates[item.id] ?? ""}
-                    onChange={(event) => setDates((current) => ({ ...current, [item.id]: event.target.value }))}
+                    onChange={(event) =>
+                      setDates((current) => ({
+                        ...current,
+                        [item.id]: event.target.value,
+                      }))
+                    }
                     className="mt-1 min-h-11 w-full rounded-lg border border-[var(--line)] px-3 text-sm text-[var(--ink)]"
                   />
                 </label>
@@ -162,11 +262,21 @@ export function IngestionOperations({ initialStatus }: { initialStatus: Ingestio
   );
 }
 
-function Metric({ label, value }: { label: string; value: number | undefined }) {
+function Metric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | undefined;
+}) {
   return (
     <div className="rounded-xl border border-[var(--line)] bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-[var(--purple)]">{value ?? "—"}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-semibold text-[var(--purple)]">
+        {value ?? "—"}
+      </p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { FatalError, RetryableError } from "workflow";
+import { FatalError } from "workflow";
 import { getDocumentProxy } from "unpdf";
+import { fetchBoundedSource } from "@/lib/intelligence/ingestion/fetch-bounded";
 import {
   assertAllowedIngestionUrl,
   buildAllowedHosts,
@@ -25,9 +26,6 @@ import type {
 const MAX_FETCH_BYTES = 48 * 1024 * 1024;
 const MAX_PDF_PAGES = 160;
 const MAX_PDF_EXTRACTION_MS = 45_000;
-const USER_AGENT =
-  "FS-Intelligence/1.0 (+https://www.rossbloomfield.com/intelligence/methodology)";
-
 const organisationBySourceKey: Record<string, string> = {
   "SRC-0155": "canada-life",
   "SRC-0156": "zurich-ireland",
@@ -36,7 +34,9 @@ const organisationBySourceKey: Record<string, string> = {
   "SRC-0192": "aviva-ireland",
 };
 
-export async function loadSourceIngestionContext(runId: string): Promise<SourceIngestionContext> {
+export async function loadSourceIngestionContext(
+  runId: string,
+): Promise<SourceIngestionContext> {
   "use step";
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const db = createAdminClient();
@@ -45,42 +45,58 @@ export async function loadSourceIngestionContext(runId: string): Promise<SourceI
     .select("id,execution_key,connector_id,reference_target_id,status")
     .eq("id", runId)
     .single();
-  if (runError || !run) throw new FatalError(`Ingestion run not found: ${runId}`);
-  if (run.status !== "running") throw new FatalError(`Ingestion run is not claimed: ${run.status}`);
+  if (runError || !run)
+    throw new FatalError(`Ingestion run not found: ${runId}`);
+  if (run.status !== "running")
+    throw new FatalError(`Ingestion run is not claimed: ${run.status}`);
   if (!run.connector_id || !run.reference_target_id) {
     throw new FatalError("Ingestion run is missing its connector or target");
   }
 
-  const [{ data: connector, error: connectorError }, { data: target, error: targetError }] =
-    await Promise.all([
-      db
-        .from("source_connectors")
-        .select("id,source_id,primary_endpoint_url,reporting_archive_url,enabled,approved_for_fetch")
-        .eq("id", run.connector_id)
-        .single(),
-      db
-        .from("reference_targets")
-        .select(
-          "id,source_id,reference_key,title,url,ingestion_url,content_type,reference_year,publication_date_required,enabled,approved_for_fetch",
-        )
-        .eq("id", run.reference_target_id)
-        .single(),
-    ]);
-  if (connectorError || !connector) throw new FatalError("Source connector is unavailable");
-  if (targetError || !target) throw new FatalError("Reference target is unavailable");
-  if (!connector.enabled || !connector.approved_for_fetch || !target.enabled || !target.approved_for_fetch) {
+  const [
+    { data: connector, error: connectorError },
+    { data: target, error: targetError },
+  ] = await Promise.all([
+    db
+      .from("source_connectors")
+      .select(
+        "id,source_id,primary_endpoint_url,reporting_archive_url,enabled,approved_for_fetch",
+      )
+      .eq("id", run.connector_id)
+      .single(),
+    db
+      .from("reference_targets")
+      .select(
+        "id,source_id,reference_key,title,url,ingestion_url,content_type,reference_year,publication_date_required,enabled,approved_for_fetch",
+      )
+      .eq("id", run.reference_target_id)
+      .single(),
+  ]);
+  if (connectorError || !connector)
+    throw new FatalError("Source connector is unavailable");
+  if (targetError || !target)
+    throw new FatalError("Reference target is unavailable");
+  if (
+    !connector.enabled ||
+    !connector.approved_for_fetch ||
+    !target.enabled ||
+    !target.approved_for_fetch
+  ) {
     throw new FatalError("Connector or target is not approved for fetch");
   }
   if (connector.source_id !== target.source_id) {
-    throw new FatalError("Connector and target belong to different parent sources");
+    throw new FatalError(
+      "Connector and target belong to different parent sources",
+    );
   }
 
   const { data: source, error: sourceError } = await db
     .from("sources")
-    .select("id,source_key,title,canonical_domain,url")
+    .select("id,source_key,title,source_class,canonical_domain,url")
     .eq("id", connector.source_id)
     .single();
-  if (sourceError || !source?.source_key) throw new FatalError("Parent source is unavailable");
+  if (sourceError || !source?.source_key)
+    throw new FatalError("Parent source is unavailable");
 
   return {
     runId: run.id,
@@ -90,6 +106,7 @@ export async function loadSourceIngestionContext(runId: string): Promise<SourceI
     parentSourceId: source.id,
     sourceKey: source.source_key,
     sourceTitle: source.title,
+    sourceClass: source.source_class,
     sourceCanonicalDomain: source.canonical_domain,
     sourceUrl: source.url,
     targetReferenceKey: target.reference_key,
@@ -116,7 +133,11 @@ export async function fetchAndParseSource(
     context.primaryEndpointUrl,
     context.reportingArchiveUrl,
   ]);
-  const first = await fetchBounded(context.ingestionUrl, allowedHosts);
+  const first = await fetchBoundedSource(context.ingestionUrl, allowedHosts, {
+    maxBytes: MAX_FETCH_BYTES,
+    timeoutMs: 45_000,
+    accept: "text/html,application/pdf;q=0.9,*/*;q=0.5",
+  });
   const firstType = contentType(first.response);
   let selected = first;
   let usedDiscoveryPage = false;
@@ -124,7 +145,9 @@ export async function fetchAndParseSource(
   if (firstType === "text/html") {
     const html = new TextDecoder().decode(first.body);
     if (looksLikeAccessChallenge(html)) {
-      throw new FatalError("The official source returned an access challenge instead of evidence");
+      throw new FatalError(
+        "The official source returned an access challenge instead of evidence",
+      );
     }
     const allowedLinks = extractHtmlLinks(html, first.url).filter((link) => {
       try {
@@ -140,7 +163,11 @@ export async function fetchAndParseSource(
       title: context.targetTitle,
     });
     if (candidate && candidate.href !== normaliseCanonicalUrl(first.url)) {
-      selected = await fetchBounded(candidate.href, allowedHosts);
+      selected = await fetchBoundedSource(candidate.href, allowedHosts, {
+        maxBytes: MAX_FETCH_BYTES,
+        timeoutMs: 45_000,
+        accept: "text/html,application/pdf;q=0.9,*/*;q=0.5",
+      });
       usedDiscoveryPage = true;
     }
   }
@@ -154,7 +181,9 @@ export async function fetchAndParseSource(
       contentType: "application/pdf",
       publicationDate: null,
       contentHash: sha256(selected.body),
-      bytesFetched: first.body.byteLength + (selected === first ? 0 : selected.body.byteLength),
+      bytesFetched:
+        first.body.byteLength +
+        (selected === first ? 0 : selected.body.byteLength),
       pageCount: parsed.pageCount,
       pagesScanned: parsed.pagesScanned,
       extractionTruncated: parsed.extractionTruncated,
@@ -164,28 +193,43 @@ export async function fetchAndParseSource(
   }
 
   if (selectedType !== "text/html") {
-    throw new FatalError(`Unsupported response content type: ${selected.response.headers.get("content-type") ?? "unknown"}`);
+    throw new FatalError(
+      `Unsupported response content type: ${selected.response.headers.get("content-type") ?? "unknown"}`,
+    );
   }
   const html = new TextDecoder().decode(selected.body);
   if (looksLikeAccessChallenge(html)) {
-    throw new FatalError("The official source returned an access challenge instead of evidence");
+    throw new FatalError(
+      "The official source returned an access challenge instead of evidence",
+    );
   }
   const text = stripHtml(html);
-  const selectedPassages = selectEvidencePassages(chunkText(text, { sectionLabel: "Official web page" }), {
-    title: context.targetTitle,
-    contentType: context.contentType,
-  });
-  if (!selectedPassages.length) throw new FatalError("No relevant evidence passages were extracted");
+  const selectedPassages = selectEvidencePassages(
+    chunkText(text, { sectionLabel: "Official web page" }),
+    {
+      title: context.targetTitle,
+      contentType: context.contentType,
+    },
+  );
+  if (!selectedPassages.length)
+    throw new FatalError("No relevant evidence passages were extracted");
   return {
     canonicalUrl: normaliseCanonicalUrl(selected.url),
     title: extractHtmlTitle(html) ?? context.targetTitle,
     contentType: "text/html",
     publicationDate: extractHtmlPublicationDate(html),
     contentHash: sha256(selected.body),
-    bytesFetched: first.body.byteLength + (selected === first ? 0 : selected.body.byteLength),
+    bytesFetched:
+      first.body.byteLength +
+      (selected === first ? 0 : selected.body.byteLength),
     pageCount: null,
     pagesScanned: null,
-    extractionTruncated: text.length > selectedPassages.reduce((sum, passage) => sum + passage.content.length, 0),
+    extractionTruncated:
+      text.length >
+      selectedPassages.reduce(
+        (sum, passage) => sum + passage.content.length,
+        0,
+      ),
     usedDiscoveryPage,
     passages: finalisePassages(selectedPassages),
   };
@@ -200,6 +244,12 @@ export async function persistParsedSource(
   "use step";
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const db = createAdminClient();
+  const release = context.executionKey.startsWith("r5.4:") ? "R5.4" : "R5.3";
+  const evidenceClassification =
+    context.sourceKey === "SRC-0001" ||
+    /regulat/i.test(context.sourceClass ?? "")
+      ? "primary_regulatory_source"
+      : "primary_company_source";
   const itemKey = `r5.3:${sha256(document.canonicalUrl)}`;
   const { data: existing } = await db
     .from("source_items")
@@ -207,7 +257,11 @@ export async function persistParsedSource(
     .eq("item_key", itemKey)
     .maybeSingle();
   if (existing?.approved) {
-    return { sourceItemId: existing.id, passageCount: document.passages.length, alreadyApproved: true };
+    return {
+      sourceItemId: existing.id,
+      passageCount: document.passages.length,
+      alreadyApproved: true,
+    };
   }
 
   const { data: item, error: itemError } = await db
@@ -227,12 +281,12 @@ export async function persistParsedSource(
         content_hash: document.contentHash,
         fetch_status: "parsed",
         rejection_reason: null,
-        evidence_classification: "primary_company_source",
+        evidence_classification: evidenceClassification,
         approved: false,
         fetched_at: new Date().toISOString(),
         last_verified_at: new Date().toISOString(),
         metadata: {
-          release: "R5.3",
+          release,
           executionKey: context.executionKey,
           sourceKey: context.sourceKey,
           referenceKey: context.targetReferenceKey,
@@ -248,10 +302,19 @@ export async function persistParsedSource(
     )
     .select("id")
     .single();
-  if (itemError || !item) throw new Error(`Could not persist source item: ${itemError?.message ?? "unknown error"}`);
+  if (itemError || !item)
+    throw new Error(
+      `Could not persist source item: ${itemError?.message ?? "unknown error"}`,
+    );
 
-  const { error: deleteError } = await db.from("source_chunks").delete().eq("source_item_id", item.id);
-  if (deleteError) throw new Error(`Could not replace evidence passages: ${deleteError.message}`);
+  const { error: deleteError } = await db
+    .from("source_chunks")
+    .delete()
+    .eq("source_item_id", item.id);
+  if (deleteError)
+    throw new Error(
+      `Could not replace evidence passages: ${deleteError.message}`,
+    );
   const { error: chunkError } = await db.from("source_chunks").insert(
     document.passages.map((passage, index) => ({
       source_item_id: item.id,
@@ -262,10 +325,13 @@ export async function persistParsedSource(
       page_number: passage.pageNumber,
       section_label: passage.sectionLabel,
       claim_type: "bounded_extract",
-      metadata: { release: "R5.3", relevanceScore: passage.relevanceScore },
+      metadata: { release, relevanceScore: passage.relevanceScore },
     })),
   );
-  if (chunkError) throw new Error(`Could not persist evidence passages: ${chunkError.message}`);
+  if (chunkError)
+    throw new Error(
+      `Could not persist evidence passages: ${chunkError.message}`,
+    );
 
   const organisationSlug = organisationBySourceKey[context.sourceKey];
   if (organisationSlug) {
@@ -277,11 +343,19 @@ export async function persistParsedSource(
     if (organisation) {
       await db
         .from("source_item_organisations")
-        .upsert({ source_item_id: item.id, organisation_id: organisation.id, relationship: "subject" })
+        .upsert({
+          source_item_id: item.id,
+          organisation_id: organisation.id,
+          relationship: "subject",
+        })
         .throwOnError();
     }
   }
-  return { sourceItemId: item.id, passageCount: document.passages.length, alreadyApproved: false };
+  return {
+    sourceItemId: item.id,
+    passageCount: document.passages.length,
+    alreadyApproved: false,
+  };
 }
 
 export async function completeSourceIngestionRun(
@@ -292,7 +366,9 @@ export async function completeSourceIngestionRun(
   "use step";
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const db = createAdminClient();
-  const requiresDateReview = context.publicationDateRequired && !document.publicationDate;
+  const release = context.executionKey.startsWith("r5.4:") ? "R5.4" : "R5.3";
+  const requiresDateReview =
+    context.publicationDateRequired && !document.publicationDate;
   await db
     .from("source_ingestion_runs")
     .update({
@@ -303,9 +379,11 @@ export async function completeSourceIngestionRun(
       error_count: 0,
       bytes_fetched: document.bytesFetched,
       completed_at: new Date().toISOString(),
-      error_summary: requiresDateReview ? "Publication date requires human verification" : null,
+      error_summary: requiresDateReview
+        ? "Publication date requires human verification"
+        : null,
       metadata: {
-        release: "R5.3",
+        release,
         sourceItemId: persisted.sourceItemId,
         passageCount: persisted.passageCount,
         alreadyApproved: persisted.alreadyApproved,
@@ -334,7 +412,7 @@ export async function failSourceIngestionRun(runId: string, message: string) {
   const db = createAdminClient();
   const { data: run } = await db
     .from("source_ingestion_runs")
-    .select("connector_id,reference_target_id")
+    .select("connector_id,reference_target_id,metadata")
     .eq("id", runId)
     .maybeSingle();
   const blocked =
@@ -348,7 +426,11 @@ export async function failSourceIngestionRun(runId: string, message: string) {
       error_count: 1,
       completed_at: new Date().toISOString(),
       error_summary: message.slice(0, 1_000),
-      metadata: { release: "R5.3", approvalRequiredBeforeRetrieval: true },
+      metadata: {
+        ...asRecord(run?.metadata),
+        release: asRecord(run?.metadata).release === "R5.4" ? "R5.4" : "R5.3",
+        approvalRequiredBeforeRetrieval: true,
+      },
     })
     .eq("id", runId)
     .throwOnError();
@@ -381,55 +463,6 @@ export async function failSourceIngestionRun(runId: string, message: string) {
   }
 }
 
-async function fetchBounded(value: string, allowedHosts: ReadonlySet<string>) {
-  let current = assertAllowedIngestionUrl(value, allowedHosts);
-  for (let redirect = 0; redirect <= 5; redirect += 1) {
-    const response = await fetch(current, {
-      headers: { Accept: "text/html,application/pdf;q=0.9,*/*;q=0.5", "User-Agent": USER_AGENT },
-      redirect: "manual",
-      signal: AbortSignal.timeout(45_000),
-    });
-    if ([301, 302, 303, 307, 308].includes(response.status)) {
-      const location = response.headers.get("location");
-      if (!location) throw new FatalError("Official source returned a redirect without a destination");
-      current = assertAllowedIngestionUrl(new URL(location, current).toString(), allowedHosts);
-      continue;
-    }
-    if (response.status === 429) throw new RetryableError("Official source rate limited the request", { retryAfter: "5m" });
-    if (response.status >= 500) throw new RetryableError(`Official source returned HTTP ${response.status}`, { retryAfter: "2m" });
-    if (!response.ok) throw new FatalError(`Official source returned HTTP ${response.status}`);
-    const declaredLength = Number(response.headers.get("content-length") ?? 0);
-    if (declaredLength > MAX_FETCH_BYTES) throw new FatalError("Official source exceeds the 48 MB ingestion limit");
-    const body = await readBoundedBody(response, MAX_FETCH_BYTES);
-    return { response, body, url: current.toString() };
-  }
-  throw new FatalError("Official source exceeded the redirect limit");
-}
-
-async function readBoundedBody(response: Response, limit: number) {
-  if (!response.body) return new Uint8Array();
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > limit) {
-      await reader.cancel();
-      throw new FatalError("Official source exceeded the bounded download limit");
-    }
-    chunks.push(value);
-  }
-  const body = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
-}
-
 async function parsePdf(body: Uint8Array, context: SourceIngestionContext) {
   const pdf = await getDocumentProxy(body, {
     maxImageSize: 16_777_216,
@@ -450,7 +483,12 @@ async function parsePdf(body: Uint8Array, context: SourceIngestionContext) {
         .join(" ")
         .replace(/\s+/g, " ")
         .trim();
-      candidates.push(...chunkText(content, { pageNumber, sectionLabel: `Page ${pageNumber}` }));
+      candidates.push(
+        ...chunkText(content, {
+          pageNumber,
+          sectionLabel: `Page ${pageNumber}`,
+        }),
+      );
       page.cleanup();
       pagesScanned = pageNumber;
     }
@@ -461,11 +499,16 @@ async function parsePdf(body: Uint8Array, context: SourceIngestionContext) {
     title: context.targetTitle,
     contentType: context.contentType,
   });
-  if (!passages.length) throw new FatalError("No relevant evidence passages were extracted from the PDF");
+  if (!passages.length)
+    throw new FatalError(
+      "No relevant evidence passages were extracted from the PDF",
+    );
   return {
     pageCount,
     pagesScanned,
-    extractionTruncated: pageCount > pagesScanned || Date.now() - startedAt > MAX_PDF_EXTRACTION_MS,
+    extractionTruncated:
+      pageCount > pagesScanned ||
+      Date.now() - startedAt > MAX_PDF_EXTRACTION_MS,
     passages,
   };
 }
@@ -482,17 +525,33 @@ function finalisePassages(passages: ReturnType<typeof selectEvidencePassages>) {
 }
 
 function contentType(response: Response) {
-  const value = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLocaleLowerCase("en-IE");
+  const value = response.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLocaleLowerCase("en-IE");
   if (value === "application/pdf") return value;
-  if (value === "text/html" || value === "application/xhtml+xml") return "text/html";
+  if (value === "text/html" || value === "application/xhtml+xml")
+    return "text/html";
   return value ?? "unknown";
 }
 
 function looksLikeAccessChallenge(html: string) {
   const text = stripHtml(html);
-  return text.length < 300 || /incapsula|access denied|reference error|captcha|verify you are human/i.test(text);
+  return (
+    text.length < 300 ||
+    /incapsula|access denied|reference error|captcha|verify you are human/i.test(
+      text,
+    )
+  );
 }
 
 function sha256(value: Uint8Array | string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
