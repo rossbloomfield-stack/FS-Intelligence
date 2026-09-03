@@ -1,4 +1,5 @@
 import { startDueSourceDiscovery } from "@/lib/intelligence/ingestion/start-discovery";
+import { backfillApprovedEmbeddings } from "@/lib/intelligence/embedding-backfill";
 import { isDublinEight } from "@/lib/research/reporting-period";
 
 export async function GET(request: Request) {
@@ -15,9 +16,12 @@ export async function GET(request: Request) {
     });
   }
 
-  const discovery = await startDueSourceDiscovery(4);
+  const [discovery, embeddings] = await Promise.all([
+    startDueSourceDiscovery(4),
+    backfillApprovedEmbeddings(50),
+  ]);
   return Response.json(
-    { skipped: false, forced: force, discovery },
+    { skipped: false, forced: force, discovery, embeddings },
     { status: discovery.started.length ? 202 : 200 },
   );
 }
