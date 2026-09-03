@@ -127,7 +127,13 @@ begin
       and target.approved_for_fetch
     order by
       case when run.metadata->>'release'='R5.4' then 0 else 1 end,
-      case when run.metadata->>'release'='R5.4' then run.created_at end desc nulls last,
+      case when run.metadata->>'release'='R5.4' then run.metadata->>'discoveryDate' end desc nulls last,
+      case
+        when run.metadata->>'release'='R5.4'
+          and run.metadata->>'candidateRank' ~ '^[0-9]+$'
+        then (run.metadata->>'candidateRank')::integer
+      end asc nulls last,
+      case when run.metadata->>'release'='R5.4' then run.created_at end asc nulls last,
       run.created_at,
       run.id
     for update of run skip locked

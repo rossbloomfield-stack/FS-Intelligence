@@ -183,6 +183,11 @@ allowlists, routine-notice exclusions, response-size limits and per-source item
 ceilings. A successful pass creates idempotent readiness-A targets and queues
 them ahead of the older verification backlog.
 
+Queue priority uses the latest discovery date and candidate rank. Publication
+dates found on approved feeds/listings are carried into the parsed item to make
+review faster, but they are not trusted for retrieval until the administrator
+approves the item.
+
 Discovery and ingestion still do not publish evidence. Parsed items remain
 unavailable to conversational retrieval until an administrator checks the
 official source and publication date and explicitly approves them. The existing

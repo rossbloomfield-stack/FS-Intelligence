@@ -13,7 +13,7 @@ Zurich and Aviva are excluded because their listings currently reject the bounde
 3. a durable Workflow run fetches the approved listing or feed with redirect, size, timeout and host controls;
 4. RSS/Atom or HTML links are normalised, deduplicated, filtered by connector-specific path and exclusion rules, and ranked by date and strategic relevance;
 5. up to the connector ceiling become readiness-A dynamic reference targets and queued ingestion runs;
-6. R5.4 ingestion runs are prioritised ahead of the historical backlog;
+6. R5.4 ingestion runs are prioritised by the latest discovery date and candidate rank, ahead of the historical backlog;
 7. each discovery workflow starts up to two newly queued ingestion runs in the background, so same-day evidence can reach review without waiting for the next cron invocation;
 8. the existing ingestion workflow fetches and parses the individual item;
 9. an administrator verifies the publication date and approves or rejects it;
@@ -24,6 +24,7 @@ Zurich and Aviva are excluded because their listings currently reject the bounde
 - discovery is a permission separate from connector and target activation;
 - every discovered URL must be HTTPS and match the configured official host and path fragment;
 - discovered targets are idempotent by canonical URL hash;
+- publication dates found in an approved feed or listing are carried into parsing but remain subject to administrator verification;
 - routine share-dealing and voting-rights notices are excluded for the bank feeds;
 - a connector creates no more than 5–8 candidate targets per daily run;
 - raw pages are not retained; the existing bounded passage and review rules apply;

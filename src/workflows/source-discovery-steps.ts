@@ -172,7 +172,7 @@ export async function persistDiscoveredSources(
   ]);
   let queuedCount = 0;
   let duplicateCount = 0;
-  for (const candidate of candidates) {
+  for (const [candidateIndex, candidate] of candidates.entries()) {
     if (existing.has(candidate.canonicalUrl)) {
       duplicateCount += 1;
       continue;
@@ -251,6 +251,8 @@ export async function persistDiscoveredSources(
           release: "R5.4",
           scope: "daily official-source discovery",
           discoveryRunId: context.runId,
+          discoveryDate: context.discoveryDate,
+          candidateRank: candidateIndex + 1,
           discoveredPublicationDate: candidate.publicationDate,
           approvalRequiredBeforeRetrieval: true,
         },

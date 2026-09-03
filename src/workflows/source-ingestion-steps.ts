@@ -42,7 +42,7 @@ export async function loadSourceIngestionContext(
   const db = createAdminClient();
   const { data: run, error: runError } = await db
     .from("source_ingestion_runs")
-    .select("id,execution_key,connector_id,reference_target_id,status")
+    .select("id,execution_key,connector_id,reference_target_id,status,metadata")
     .eq("id", runId)
     .single();
   if (runError || !run)
@@ -97,6 +97,12 @@ export async function loadSourceIngestionContext(
     .single();
   if (sourceError || !source?.source_key)
     throw new FatalError("Parent source is unavailable");
+  const runMetadata = asRecord(run.metadata);
+  const discoveredPublicationDate =
+    typeof runMetadata.discoveredPublicationDate === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(runMetadata.discoveredPublicationDate)
+      ? runMetadata.discoveredPublicationDate
+      : null;
 
   return {
     runId: run.id,
@@ -116,6 +122,7 @@ export async function loadSourceIngestionContext(
     contentType: target.content_type,
     referenceYear: target.reference_year,
     publicationDateRequired: target.publication_date_required,
+    discoveredPublicationDate,
     primaryEndpointUrl: connector.primary_endpoint_url,
     reportingArchiveUrl: connector.reporting_archive_url,
   };
@@ -179,7 +186,7 @@ export async function fetchAndParseSource(
       canonicalUrl: normaliseCanonicalUrl(selected.url),
       title: context.targetTitle,
       contentType: "application/pdf",
-      publicationDate: null,
+      publicationDate: context.discoveredPublicationDate,
       contentHash: sha256(selected.body),
       bytesFetched:
         first.body.byteLength +
@@ -217,7 +224,8 @@ export async function fetchAndParseSource(
     canonicalUrl: normaliseCanonicalUrl(selected.url),
     title: extractHtmlTitle(html) ?? context.targetTitle,
     contentType: "text/html",
-    publicationDate: extractHtmlPublicationDate(html),
+    publicationDate:
+      extractHtmlPublicationDate(html) ?? context.discoveredPublicationDate,
     contentHash: sha256(selected.body),
     bytesFetched:
       first.body.byteLength +
@@ -295,6 +303,7 @@ export async function persistParsedSource(
           extractionTruncated: document.extractionTruncated,
           usedDiscoveryPage: document.usedDiscoveryPage,
           publicationDateRequired: context.publicationDateRequired,
+          discoveredPublicationDate: context.discoveredPublicationDate,
           approvalRequiredBeforeRetrieval: true,
         },
       },
@@ -390,6 +399,7 @@ export async function completeSourceIngestionRun(
         approvalRequiredBeforeRetrieval: true,
         publicationDateRequired: context.publicationDateRequired,
         publicationDatePresent: Boolean(document.publicationDate),
+        discoveredPublicationDate: context.discoveredPublicationDate,
         extractionTruncated: document.extractionTruncated,
       },
     })

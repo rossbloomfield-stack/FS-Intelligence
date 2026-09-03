@@ -30,6 +30,7 @@ export type SourceIngestionContext = {
   contentType: string;
   referenceYear: number | null;
   publicationDateRequired: boolean;
+  discoveredPublicationDate: string | null;
   primaryEndpointUrl: string;
   reportingArchiveUrl: string | null;
 };
