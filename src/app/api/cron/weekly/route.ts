@@ -5,6 +5,7 @@ import {
   prepareWeeklyReport,
 } from "@/lib/research/start-report";
 import { reportWorkflow } from "@/workflows/report";
+import { startQueuedSourceIngestion } from "@/lib/intelligence/ingestion/start-queued";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -14,16 +15,18 @@ export async function GET(request: Request) {
   ) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const ingestion = await startQueuedSourceIngestion(2);
   if (!isDublinEight()) {
     return Response.json({
       skipped: true,
       reason: "Outside the 08:00 Europe/Dublin schedule window",
+      ingestion,
     });
   }
 
   const prepared = await prepareWeeklyReport({ autoPublish: true });
   if (prepared.duplicate) {
-    return Response.json({ duplicate: true, reportRunId: null });
+    return Response.json({ duplicate: true, reportRunId: null, ingestion });
   }
 
   const run = await start(reportWorkflow, [prepared.input]);
@@ -33,6 +36,7 @@ export async function GET(request: Request) {
       duplicate: false,
       reportRunId: prepared.reportRunId,
       workflowRunId: run.runId,
+      ingestion,
     },
     { status: 202 },
   );

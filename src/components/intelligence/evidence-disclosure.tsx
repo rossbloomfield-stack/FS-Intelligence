@@ -1,0 +1,6 @@
+export type EvidenceItem = { title: string; publisher: string; date?: string; primary: boolean; classification: string; claim: string; url: string };
+
+export function EvidenceDisclosure({ items }: { items: EvidenceItem[] }) {
+  const primary = items.filter((item) => item.primary).length;
+  return <details className="evidence-disclosure"><summary>Evidence: {items.length ? "High" : "Insufficient"} · {items.length} source{items.length === 1 ? "" : "s"} · {primary} primary</summary><div className="mt-3 space-y-3">{items.length ? items.map((item) => <article className="rounded-lg border border-[var(--line)] bg-white p-4" key={`${item.url}-${item.claim}`}><div className="flex flex-wrap gap-2"><span className="signal-pill">{item.primary ? "Primary" : "Secondary"}</span><span className="signal-pill">{item.classification}</span></div><h4 className="mt-2 font-semibold">{item.title}</h4><p className="mt-1 text-xs text-[var(--muted)]">{item.publisher}{item.date ? ` · ${item.date}` : ""}</p><p className="mt-2 text-sm"><strong>Claim supported:</strong> {item.claim}</p><a className="source-link" href={item.url} rel="noreferrer" target="_blank">Open source</a></article>) : <p className="text-sm text-[var(--muted)]">Evidence currently insufficient to determine impact.</p>}</div></details>;
+}

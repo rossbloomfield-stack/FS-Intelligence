@@ -10,3 +10,5 @@ src/app/.well-known/workflow/
 evals/results/*
 !evals/results/.gitignore
 /.swc
+.vercel/
+.env*.local
