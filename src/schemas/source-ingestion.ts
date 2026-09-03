@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const startSourceIngestionSchema = z.object({
+  action: z.enum(["ingest", "discover"]).default("ingest"),
   limit: z.number().int().min(1).max(5).default(2),
 });
 
@@ -19,6 +20,7 @@ export type SourceIngestionContext = {
   parentSourceId: string;
   sourceKey: string;
   sourceTitle: string;
+  sourceClass: string | null;
   sourceCanonicalDomain: string | null;
   sourceUrl: string;
   targetReferenceKey: string;
@@ -28,6 +30,7 @@ export type SourceIngestionContext = {
   contentType: string;
   referenceYear: number | null;
   publicationDateRequired: boolean;
+  discoveredPublicationDate: string | null;
   primaryEndpointUrl: string;
   reportingArchiveUrl: string | null;
 };
@@ -73,5 +76,8 @@ export type IngestionOperationsStatus = {
   approvedSourceItems: number;
   storedPassages: number;
   enabledTargets: number;
+  discoveryEnabledConnectors: number;
+  discoveredTargets: number;
+  lastDiscoverySucceededAt: string | null;
   pendingItems: IngestionReviewItem[];
 };

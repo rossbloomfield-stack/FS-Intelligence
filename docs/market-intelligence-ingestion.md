@@ -173,3 +173,29 @@ R5.3 adds the bounded worker for the queued cohort. Eligible records are claimed
 Successful parsing does not make evidence searchable. Administrators must inspect the official source, verify the publication date and explicitly approve or reject each item. Approval promotes the item to a citation-ready `sources` record and records an audit event. The existing DST-safe production cron invocations drain two records each, while an authenticated administrator can start five at a time.
 
 Wider A-grade activation, B-grade discovery and every C-grade target remain disabled.
+
+## R5.4 daily discovery update
+
+R5.4 adds one bounded daily discovery pass over four verified official listings:
+Central Bank of Ireland, the Financial Conduct Authority, AIB and Bank of Ireland. Discovery is a separate
+connector permission and is constrained by exact HTTPS hosts, configured path
+allowlists, routine-notice exclusions, response-size limits and per-source item
+ceilings. A successful pass creates idempotent readiness-A targets and queues
+them ahead of the older verification backlog.
+
+Queue priority uses the latest discovery date and candidate rank. Publication
+dates found on approved feeds/listings are carried into the parsed item to make
+review faster, but they are not trusted for retrieval until the administrator
+approves the item.
+
+Discovery and ingestion still do not publish evidence. Parsed items remain
+unavailable to conversational retrieval until an administrator checks the
+official source and publication date and explicitly approves them. The existing
+dedicated production discovery cron runs inside the Dublin 08:00 schedule
+window, while the existing weekly endpoint drains a small ingestion batch on
+each authenticated invocation. Both routes use the existing secret and DST-safe
+dual UTC schedule.
+
+Zurich, Aviva and Great-West Lifeco remain fixed-target sources because their current
+listing pages do not provide a stable, server-readable discovery surface. No
+broad crawler, B-grade activation or C-grade activation is included in R5.4.

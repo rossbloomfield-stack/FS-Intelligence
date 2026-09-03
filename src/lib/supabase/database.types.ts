@@ -2839,6 +2839,13 @@ export type Database = {
           consecutive_failures: number
           created_at: string
           deduplication_key: string
+          discovery_enabled: boolean
+          discovery_exclude_terms: string[]
+          discovery_include_paths: string[]
+          discovery_last_attempted_at: string | null
+          discovery_last_succeeded_at: string | null
+          discovery_max_items: number
+          discovery_url: string | null
           enabled: boolean
           endpoint_status: string
           endpoint_verified: boolean
@@ -2864,6 +2871,13 @@ export type Database = {
           consecutive_failures?: number
           created_at?: string
           deduplication_key: string
+          discovery_enabled?: boolean
+          discovery_exclude_terms?: string[]
+          discovery_include_paths?: string[]
+          discovery_last_attempted_at?: string | null
+          discovery_last_succeeded_at?: string | null
+          discovery_max_items?: number
+          discovery_url?: string | null
           enabled?: boolean
           endpoint_status: string
           endpoint_verified?: boolean
@@ -2889,6 +2903,13 @@ export type Database = {
           consecutive_failures?: number
           created_at?: string
           deduplication_key?: string
+          discovery_enabled?: boolean
+          discovery_exclude_terms?: string[]
+          discovery_include_paths?: string[]
+          discovery_last_attempted_at?: string | null
+          discovery_last_succeeded_at?: string | null
+          discovery_max_items?: number
+          discovery_url?: string | null
           enabled?: boolean
           endpoint_status?: string
           endpoint_verified?: boolean
@@ -3702,6 +3723,10 @@ export type Database = {
         Returns: number
       }
       is_admin: { Args: never; Returns: boolean }
+      claim_source_discovery_runs: {
+        Args: { p_discovery_date?: string; p_limit?: number }
+        Returns: { connector_id: number; id: string }[]
+      }
       claim_source_ingestion_runs: {
         Args: { p_limit?: number }
         Returns: { id: string }[]
