@@ -1,4 +1,5 @@
 import { authenticateAdminRequest } from "@/lib/supabase/admin-api";
+import { backfillApprovedEmbeddings } from "@/lib/intelligence/embedding-backfill";
 import { reviewSourceItemSchema } from "@/schemas/source-ingestion";
 
 export async function POST(request: Request) {
@@ -13,5 +14,14 @@ export async function POST(request: Request) {
     p_publication_date: parsed.data.publicationDate ?? null,
   });
   if (error) return Response.json({ error: error.message }, { status: 409 });
-  return Response.json(data?.[0] ?? { review_status: parsed.data.decision });
+  const review = data?.[0] ?? { review_status: parsed.data.decision };
+  const embeddings =
+    parsed.data.decision === "approve"
+      ? await backfillApprovedEmbeddings(20).catch((error) => ({
+          status: "failed" as const,
+          processed: 0,
+          error: error instanceof Error ? error.message : String(error),
+        }))
+      : null;
+  return Response.json({ ...review, embeddings });
 }

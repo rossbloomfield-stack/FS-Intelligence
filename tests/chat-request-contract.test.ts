@@ -16,7 +16,8 @@ describe("intelligence chat request contract",()=>{
 
  it("keeps database failures observable instead of silently discarding errors",()=>{
   const route=readFileSync(join(process.cwd(),"src/app/api/intelligence/chat/route.ts"),"utf8");
-  expect(route).toContain("assertSupabaseSuccess(chunkResult,\"search_approved_source_chunks\")");
+  expect(route).toContain("retrieveIntelligenceEvidence");
+  expect(route).toContain("persistRetrievalDiagnostic");
   expect(route).toContain("X-Request-Id");
  });
 });

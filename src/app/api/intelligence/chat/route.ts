@@ -4,10 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { isApprovedEmail } from "@/lib/auth/access";
 import { fallbackAnalysis } from "@/lib/intelligence/analysis";
 import { synthesiseIntelligenceAnswer } from "@/lib/intelligence/answer-agent";
-import { type IntelligenceUIMessage } from "@/lib/intelligence/evidence";
+import { type IntelligenceAnalysis,type IntelligenceUIMessage } from "@/lib/intelligence/evidence";
 import { attachAliases,resolveOrganisations } from "@/lib/intelligence/entity-resolver";
 import { planIntelligenceQuery } from "@/lib/intelligence/query-planner";
-import { buildRetrievalSearchQuery,mergeApprovedEvidenceRows,retrieveFinancialIntelligence,type ApprovedSourceChunkRow } from "@/lib/intelligence/retriever";
+import { retrieveIntelligenceEvidence } from "@/lib/intelligence/retrieval-orchestrator";
+import { completeRetrievalDiagnostic,persistRetrievalDiagnostic } from "@/lib/intelligence/retrieval-diagnostics";
 import { buildStructuredAnswer,type StructuredKnowledge } from "@/lib/intelligence/structured-answer";
 
 export const maxDuration=30;
@@ -55,49 +56,46 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const questions=userQuestions(body.messages);
  const priorQuestions=questions.slice(0,-1);
  const contextualQuestion=[...priorQuestions.slice(-2),question].join(" ");
- const [sourceResult,organisationResult,aliasResult]=await Promise.all([
-  supabase.from("sources").select("id,title,publisher,url,publication_date,source_type,primary_source,credibility_tier,evidence_classification,notes").eq("approved_public",true).order("publication_date",{ascending:false,nullsFirst:false}).limit(250),
+ const [organisationResult,aliasResult]=await Promise.all([
   supabase.from("organisations").select("id,slug,name,sector,jurisdiction").eq("active",true),
   supabase.from("organisation_aliases").select("organisation_id,alias"),
  ]);
- assertSupabaseSuccess(sourceResult,"sources.select");
  assertSupabaseSuccess(organisationResult,"organisations.select");
  assertSupabaseSuccess(aliasResult,"organisation_aliases.select");
- const sourceRows=sourceResult.data;const organisationRows=organisationResult.data;const aliasRows=aliasResult.data;
+ const organisationRows=organisationResult.data;const aliasRows=aliasResult.data;
  const catalogue=attachAliases(organisationRows??[],aliasRows??[]);
  const organisations=resolveOrganisations(contextualQuestion,catalogue);
  const plan=planIntelligenceQuery(question,organisations);
- const retrievalSearchQuery=buildRetrievalSearchQuery(contextualQuestion,plan);
- const [chunkResult,domainAvailability]=await Promise.all([
-  supabase.rpc("search_approved_source_chunks",{search_query:retrievalSearchQuery,result_limit:60}),
-  loadDomainAvailability(supabase,plan.evidenceNeeds),
- ]);
- assertSupabaseSuccess(chunkResult,"search_approved_source_chunks");
- const chunkRows=chunkResult.data;
- const retrievalRows=mergeApprovedEvidenceRows(sourceRows??[],(chunkRows??[]) as ApprovedSourceChunkRow[]);
- const retrieval=retrieveFinancialIntelligence(contextualQuestion,plan,retrievalRows,new Date(),domainAvailability);
+ const domainAvailability=await loadDomainAvailability(supabase,plan.evidenceNeeds);
+ const retrieval=await retrieveIntelligenceEvidence({db:supabase,question:contextualQuestion,plan,domainAvailability});
  const {references,evidence,gaps}=retrieval;
  const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references);
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
  const title=question.length>72?`${question.slice(0,69)}…`:question;
  const conversationId=body.id??crypto.randomUUID();
- const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps},updated_at:new Date().toISOString()},{onConflict:"id"});
+ const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps,retrievalMetrics:retrieval.metrics},updated_at:new Date().toISOString()},{onConflict:"id"});
  assertSupabaseSuccess(conversationWrite,"conversations.upsert");
  const userMessageWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"user",content:{text:question},intent:plan.intent});
  assertSupabaseSuccess(userMessageWrite,"conversation_messages.insert_user");
  if(organisations.length){const entityWrite=await supabase.from("conversation_entities").upsert(organisations.map(item=>({conversation_id:conversationId,entity_type:"organisation",entity_id:item.id,entity_label:item.name})),{onConflict:"conversation_id,entity_type,entity_id",ignoreDuplicates:true});assertSupabaseSuccess(entityWrite,"conversation_entities.upsert")}
+ const diagnosticId=crypto.randomUUID();
+ await persistRetrievalDiagnostic({id:diagnosticId,userId:user.id,conversationId,question,plan,subqueries:retrieval.subqueries,retrieval,retrievalDurationMs:retrieval.retrievalDurationMs,semanticStatus:retrieval.semanticStatus,config:retrieval.config}).catch(error=>logRouteError(error,requestId,"retrieval_diagnostics_insert"));
+ let completedAnalysis:IntelligenceAnalysis|null=null;
+ let generationStartedAt=0;
  const stream=createUIMessageStream<IntelligenceUIMessage>({originalMessages:body.messages,execute:async({writer})=>{
   writer.write({type:"data-evidence",id:"answer-evidence",data:evidence});
   if(structuredAnswer)writer.write({type:"data-structuredAnswer",id:"answer-structure",data:structuredAnswer});
   writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"analysing",label:references.length?`Analysing ${references.length} approved sources across ${evidence.passageCount||references.length} evidence passages…`:"Assessing evidence coverage…"}});
-  let analysis;
+  generationStartedAt=Date.now();
+  let analysis:IntelligenceAnalysis;
   try{analysis=await synthesiseIntelligenceAnswer({question,conversationContext:priorQuestions,plan,evidence,knowledge:structuredKnowledge})}
   catch(error){logRouteError(error,requestId,"synthesis");analysis=fallbackAnalysis(evidence)}
+  completedAnalysis=analysis;
   writer.write({type:"data-analysis",id:"answer-analysis",data:analysis});
   writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"complete",label:"Analysis complete"}});
   writer.write({type:"text-start",id:"answer"});writer.write({type:"text-delta",id:"answer",delta:`${analysis.headline}\n\n${analysis.executiveSummary}`});writer.write({type:"text-end",id:"answer"});
- },onEnd:async({responseMessage})=>{try{const assistantWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"assistant",content:responseMessage,confidence:evidence.confidence,freshness:evidence.freshness}).select("id").single();assertSupabaseSuccess(assistantWrite,"conversation_messages.insert_assistant");const stored=assistantWrite.data;if(stored&&references.length){const referenceWrite=await supabase.from("conversation_references").insert(references.map(item=>({conversation_id:conversationId,message_id:stored.id,source_id:item.sourceId,reference_snapshot:item,rank:item.rank,support_strength:item.supportStrength==="supporting"?"direct":item.supportStrength==="counter"?"corroborating":"contextual"})));assertSupabaseSuccess(referenceWrite,"conversation_references.insert")}}catch(error){logRouteError(error,requestId,"stream_on_end")}}});
- console.log(JSON.stringify({level:"info",message:"Intelligence chat response started",route:"/api/intelligence/chat",requestId,conversationId,durationMs:Date.now()-startedAt,referenceCount:references.length,confidence:evidence.confidence}));
+ },onEnd:async({responseMessage})=>{try{const assistantWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"assistant",content:responseMessage,confidence:evidence.confidence,freshness:evidence.freshness,latency_ms:Date.now()-startedAt}).select("id").single();assertSupabaseSuccess(assistantWrite,"conversation_messages.insert_assistant");const stored=assistantWrite.data;if(stored&&references.length){const referenceWrite=await supabase.from("conversation_references").insert(references.map(item=>({conversation_id:conversationId,message_id:stored.id,source_id:item.sourceId,reference_snapshot:item,rank:item.rank,support_strength:item.supportStrength==="supporting"?"direct":item.supportStrength==="counter"?"corroborating":"contextual"})));assertSupabaseSuccess(referenceWrite,"conversation_references.insert")}if(completedAnalysis){await completeRetrievalDiagnostic({id:diagnosticId,analysis:completedAnalysis,retrieval,generationDurationMs:Date.now()-generationStartedAt})}}catch(error){logRouteError(error,requestId,"stream_on_end")}}});
+ console.log(JSON.stringify({level:"info",message:"Intelligence chat response started",route:"/api/intelligence/chat",requestId,conversationId,durationMs:Date.now()-startedAt,retrievalDurationMs:retrieval.retrievalDurationMs,referenceCount:references.length,evidenceItemCount:retrieval.metrics.selectedEvidenceCount,uniqueDocumentCount:retrieval.metrics.uniqueDocumentCount,uniqueDomainCount:retrieval.metrics.uniqueDomainCount,semanticStatus:retrieval.semanticStatus,confidence:evidence.confidence,coverage:evidence.coverage}));
  return createUIMessageStreamResponse({stream,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Request-Id":requestId}});
 }
 

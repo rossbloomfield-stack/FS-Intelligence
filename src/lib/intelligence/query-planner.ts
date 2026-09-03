@@ -6,15 +6,21 @@ export type IntelligenceQueryIntent =
   | "strategic_recommendation" | "evidence_request" | "follow_up" | "other";
 
 export type ResolvedOrganisation = { id:string; slug:string; name:string; sector:string; jurisdiction:string|null };
-export type QueryTimeframe = { label:"current"|"today"|"this_week"|"this_month"|"this_quarter"|"six_months"|"last_year"|"historical"; currentInformationRequired:boolean };
+export type QueryTimeframe = { label:"current"|"today"|"this_week"|"this_month"|"this_quarter"|"six_months"|"last_year"|"historical"; currentInformationRequired:boolean; rollingMonths:number|null };
 export type IntelligenceQueryPlan = {
   intent:IntelligenceQueryIntent;
   organisations:ResolvedOrganisation[];
+  competitors:string[];
+  people:string[];
   sectors:string[];
   products:string[];
+  markets:string[];
   jurisdictions:string[];
   regulations:string[];
   themes:string[];
+  requestedMetrics:string[];
+  signalTypes:Array<"hard"|"soft">;
+  strategicQuestionTypes:string[];
   timeframe:QueryTimeframe;
   comparisonRequested:boolean;
   strategicInterpretationRequired:boolean;
@@ -30,7 +36,7 @@ const intentRules:Array<[IntelligenceQueryIntent,RegExp]> = [
   ["product_comparison",/\b(compare|best|strongest)\b.*\b(product|proposition|pension|mortgage|protection|insurance|savings|investment)\b/i],
   ["company_comparison",/\b(compare|versus|vs\.?|which (?:company|bank|insurer|provider|firm))\b/i],
   ["company_strategy",/\b(strategy|strategic direction|growth priorities|investing in)\b/i],
-  ["regulatory_question",/\b(regulat|cpc\b|consumer protection code|dora\b|fida\b|ai act|eiopa|eba\b|esma|central bank)\b/i],
+  ["regulatory_question",/\b(regulat(?:ion|ory|or|ors|ed|ing)?|cpc\b|consumer protection code|dora\b|fida\b|ai act|eiopa|eba\b|esma|central bank)\b/i],
   ["compliance_question",/\b(compliance|finding|requirement|legal advice)\b/i],
   ["ai_transformation",/\b(ai|artificial intelligence|agentic|genai|machine learning)\b/i],
   ["financial_performance",/\b(profit|revenue|income|rote|roe\b|aum\b|assets under management|financial performance|growing fastest)\b/i],
@@ -42,6 +48,7 @@ const intentRules:Array<[IntelligenceQueryIntent,RegExp]> = [
   ["future_scenario",/\b(next (?:two|three|five|\d+) years?|future|scenario|could disrupt|what if)\b/i],
   ["strategic_recommendation",/\b(should (?:we|an?|the)|recommend|prioriti[sz]e|what (?:must|should) .* do)\b/i],
   ["market_trend",/\b(trend|changing|changed|momentum|accelerat|weakening|market shift)\b/i],
+  ["market_overview",/\b(technology vendors?|technology platforms?|core technology)\b.*\b(competitors?|financial services|market)\b|\bcompetitors?\b.*\b(technology vendors?|technology platforms?|modernis)/i],
   ["market_overview",/\b(market|sector|industry|ceo|executive|board)\b/i],
 ];
 
@@ -65,15 +72,50 @@ export function planIntelligenceQuery(question:string,organisations:ResolvedOrga
   const regulations=matches(question,["Consumer Protection Code","DORA","FIDA","AI Act"]);
   const products=extractProducts(question);
   const themes=matches(question,["agentic AI","open finance","digital advice","operational resilience","financial wellbeing","personalisation"]);
+  const explicitJurisdictions=extractJurisdictions(question);
+  const requestedMetrics=matches(question,["profit","revenue","income","ROTE","ROE","assets under management","AUM","customer growth","investment spend","cost-income ratio"]);
+  const signalTypes:Array<"hard"|"soft">=[];
+  if(/\bhard signals?\b/i.test(question))signalTypes.push("hard");
+  if(/\bsoft signals?\b/i.test(question))signalTypes.push("soft");
+  const strategicQuestionTypes=[
+    /\bthreat|risk|worried\b/i.test(question)?"threat":null,
+    /\bopportunit|growth\b/i.test(question)?"opportunity":null,
+    /\bposition|best placed|best positioned\b/i.test(question)?"positioning":null,
+    /\bwhat should|recommend|prioriti[sz]e\b/i.test(question)?"recommendation":null,
+    /\bchanged|evolv|momentum|accelerat|weakening\b/i.test(question)?"change":null,
+  ].filter((value):value is string=>Boolean(value));
   const dailyBriefingRequested=/\b(?:daily briefing|today(?:'s|’s)?\b.{0,100}\b(?:news|briefing|developments?)|news today|most relevant (?:market )?news)\b/i.test(question);
   const freshVerificationRequired=timeframe.currentInformationRequired||intent==="regulatory_question"||intent==="compliance_question";
-  return {intent,organisations,sectors:[...new Set(organisations.map(item=>item.sector))],products,jurisdictions:[...new Set(organisations.map(item=>item.jurisdiction).filter((v):v is string=>Boolean(v)))],regulations,themes,timeframe,comparisonRequested,strategicInterpretationRequired:["company_strategy","company_comparison","future_scenario","strategic_recommendation","market_overview"].includes(intent),evidenceNeeds:evidenceByIntent[intent],freshVerificationRequired,dailyBriefingRequested};
+  return {
+    intent,
+    organisations,
+    competitors:comparisonRequested?organisations.map(item=>item.name):[],
+    people:extractPeople(question),
+    sectors:[...new Set(organisations.map(item=>item.sector))],
+    products,
+    markets:extractMarkets(question),
+    jurisdictions:[...new Set([...organisations.map(item=>item.jurisdiction).filter((v):v is string=>Boolean(v)),...explicitJurisdictions])],
+    regulations,
+    themes,
+    requestedMetrics,
+    signalTypes,
+    strategicQuestionTypes,
+    timeframe,
+    comparisonRequested,
+    strategicInterpretationRequired:["company_strategy","company_comparison","future_scenario","strategic_recommendation","market_overview"].includes(intent),
+    evidenceNeeds:evidenceByIntent[intent],
+    freshVerificationRequired,
+    dailyBriefingRequested,
+  };
 }
 
 function parseTimeframe(question:string):QueryTimeframe{
-  const rules:Array<[QueryTimeframe["label"],RegExp]>=[["today",/\b(today|latest|right now|currently)\b/i],["this_week",/\bthis week\b/i],["this_month",/\bthis month\b/i],["this_quarter",/\bthis quarter\b/i],["six_months",/\b(?:last|past) six months\b/i],["last_year",/\b(?:last|past) year\b/i],["historical",/\b(?:since|before|after|changed|history|historical)\b/i]];
+  const rollingMatch=question.match(/\b(?:last|past|previous)\s+(\d{1,2})\s+months?\b/i);
+  const rollingMonths=rollingMatch?Math.min(120,Math.max(1,Number.parseInt(rollingMatch[1],10))):/\b(?:last|past|previous)\s+twelve\s+months?\b/i.test(question)?12:null;
+  const rules:Array<[QueryTimeframe["label"],RegExp]>=[["today",/\b(today|latest|right now|currently)\b/i],["this_week",/\bthis week\b/i],["this_month",/\bthis month\b/i],["this_quarter",/\bthis quarter\b/i],["six_months",/\b(?:last|past|previous) six months\b/i],["last_year",/\b(?:last|past|previous) (?:year|twelve months)|\b(?:last|past|previous) 12 months\b/i],["historical",/\b(?:since|before|after|changed|history|historical)\b/i]];
   const label=rules.find(([,pattern])=>pattern.test(question))?.[0]??"current";
-  return {label,currentInformationRequired:["today","this_week","this_month","this_quarter"].includes(label)||/\b(latest|current)\b/i.test(question)};
+  const effectiveLabel=rollingMonths===12?"last_year":rollingMonths===6?"six_months":label;
+  return {label:effectiveLabel,currentInformationRequired:["today","this_week","this_month","this_quarter"].includes(effectiveLabel)||/\b(latest|current)\b/i.test(question),rollingMonths};
 }
 function matches(question:string,values:string[]){return values.filter(value=>question.toLocaleLowerCase("en-IE").includes(value.toLocaleLowerCase("en-IE")))}
 
@@ -94,4 +136,19 @@ function extractProducts(question:string){
   if(matched.includes("mortgage_protection"))return matched.filter(category=>category!=="mortgages"&&category!=="protection");
   if(matched.includes("health_insurance"))return matched.filter(category=>category!=="protection");
   return matched;
+}
+
+function extractJurisdictions(question:string){
+ const values:Array<[string,RegExp]>=[["IE",/\bIreland|Irish\b/i],["UK",/\bUK|United Kingdom|British\b/i],["EU",/\bEU|European Union|European\b/i],["global",/\bglobal|international|worldwide\b/i]];
+ return values.filter(([,pattern])=>pattern.test(question)).map(([value])=>value);
+}
+
+function extractMarkets(question:string){
+ const values:Array<[string,RegExp]>=[["banking",/\bbanks?|banking\b/i],["insurance",/\binsurers?|insurance\b/i],["pensions",/\bpensions?\b/i],["wealth",/\bwealth|investments?\b/i],["payments",/\bpayments?\b/i],["health_insurance",/\bhealth insurance\b/i]];
+ return values.filter(([,pattern])=>pattern.test(question)).map(([value])=>value);
+}
+
+function extractPeople(question:string){
+ const matches=[...question.matchAll(/\b(?:CEO|chief executive|led by|appointed)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b/g)];
+ return [...new Set(matches.map(match=>match[1]))];
 }
