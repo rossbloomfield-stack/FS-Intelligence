@@ -1,6 +1,7 @@
 import { startDueSourceDiscovery } from "@/lib/intelligence/ingestion/start-discovery";
 import { backfillApprovedEmbeddings } from "@/lib/intelligence/embedding-backfill";
 import { isDublinEight } from "@/lib/research/reporting-period";
+import { queueSignalBackfill } from "@/lib/intelligence/signals/operations";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -16,12 +17,17 @@ export async function GET(request: Request) {
     });
   }
 
-  const [discovery, embeddings] = await Promise.all([
+  const [discovery, embeddings, signalBackfill] = await Promise.all([
     startDueSourceDiscovery(4),
     backfillApprovedEmbeddings(50),
+    queueSignalBackfill(3).catch((error) => ({
+      requested: 3,
+      queued: 0,
+      error: error instanceof Error ? error.message : "Signal backfill unavailable",
+    })),
   ]);
   return Response.json(
-    { skipped: false, forced: force, discovery, embeddings },
+    { skipped: false, forced: force, discovery, embeddings, signalBackfill },
     { status: discovery.started.length ? 202 : 200 },
   );
 }

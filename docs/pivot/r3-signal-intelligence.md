@@ -68,6 +68,8 @@ Approved R2 evidence can enter R3 in two ways:
 1. approving a source item queues a Workflow DevKit signal-processing run;
 2. an administrator starts a bounded backfill of at most five approved items.
 
+The existing daily discovery endpoint also advances three approved historical items per run. Signal backfill errors are isolated so R3 cannot prevent R2 discovery or embedding work from completing.
+
 Processing is idempotent by source item, content hash and prompt version. Unchanged evidence cannot create a second run or duplicate observation. A deterministic eligibility score uses document class, material language, authority, content length and material-change classification before an extraction call is allowed.
 
 The current structured extraction contract limits a document to twelve observations. Exact evidence text must occur in exactly one supplied passage and supplied offsets must match. Missing or ambiguous anchors are rejected. Low materiality is rejected; uncertain entity or extraction confidence enters `needs_review`. Source text is passed as untrusted JSON under a system instruction that explicitly rejects prompt injection, hidden instructions and strategic inference.
