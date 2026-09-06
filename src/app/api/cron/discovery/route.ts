@@ -10,21 +10,22 @@ export async function GET(request: Request) {
   }
 
   const force = new URL(request.url).searchParams.get("force") === "1";
+  const signalBackfill = await queueSignalBackfill(3).catch((error) => ({
+    requested: 3,
+    queued: 0,
+    error: error instanceof Error ? error.message : "Signal backfill unavailable",
+  }));
   if (!force && !isDublinEight()) {
     return Response.json({
       skipped: true,
       reason: "Outside the 08:00 Europe/Dublin schedule window",
+      signalBackfill,
     });
   }
 
-  const [discovery, embeddings, signalBackfill] = await Promise.all([
+  const [discovery, embeddings] = await Promise.all([
     startDueSourceDiscovery(4),
     backfillApprovedEmbeddings(50),
-    queueSignalBackfill(3).catch((error) => ({
-      requested: 3,
-      queued: 0,
-      error: error instanceof Error ? error.message : "Signal backfill unavailable",
-    })),
   ]);
   return Response.json(
     { skipped: false, forced: force, discovery, embeddings, signalBackfill },

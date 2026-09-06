@@ -68,7 +68,7 @@ Approved R2 evidence can enter R3 in two ways:
 1. approving a source item queues a Workflow DevKit signal-processing run;
 2. an administrator starts a bounded backfill of at most five approved items.
 
-The existing daily discovery endpoint also advances three approved historical items per run. Signal backfill errors are isolated so R3 cannot prevent R2 discovery or embedding work from completing.
+Each authenticated invocation of the existing discovery cron advances at most three approved historical items, including a manual Vercel run outside the discovery window. Signal backfill errors are isolated so R3 cannot prevent R2 discovery or embedding work from completing. Idempotent run keys prevent the same document version from being reprocessed.
 
 Processing is idempotent by source item, content hash and prompt version. Unchanged evidence cannot create a second run or duplicate observation. A deterministic eligibility score uses document class, material language, authority, content length and material-change classification before an extraction call is allowed.
 
