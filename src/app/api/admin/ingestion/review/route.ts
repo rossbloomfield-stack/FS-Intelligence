@@ -1,6 +1,7 @@
 import { authenticateAdminRequest } from "@/lib/supabase/admin-api";
 import { backfillApprovedEmbeddings } from "@/lib/intelligence/embedding-backfill";
 import { reviewSourceItemSchema } from "@/schemas/source-ingestion";
+import { queueSignalProcessing } from "@/lib/intelligence/signals/queue";
 
 export async function POST(request: Request) {
   const admin = await authenticateAdminRequest();
@@ -23,5 +24,14 @@ export async function POST(request: Request) {
           error: error instanceof Error ? error.message : String(error),
         }))
       : null;
-  return Response.json({ ...review, embeddings });
+  const signalProcessing =
+    parsed.data.decision === "approve"
+      ? await queueSignalProcessing(parsed.data.itemId, "source_approval").catch((error) => ({
+          status: "failed" as const,
+          runId: null,
+          workflowRunId: null,
+          error: error instanceof Error ? error.message : String(error),
+        }))
+      : null;
+  return Response.json({ ...review, embeddings, signalProcessing });
 }
