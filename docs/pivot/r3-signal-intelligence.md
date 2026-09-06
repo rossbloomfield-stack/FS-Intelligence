@@ -72,6 +72,8 @@ Each authenticated invocation of the existing discovery cron advances at most th
 
 Processing is idempotent by source item, content hash and prompt version. Unchanged evidence cannot create a second run or duplicate observation. A deterministic eligibility score uses document class, material language, authority, content length and material-change classification before an extraction call is allowed.
 
+The run key also carries a pipeline version. A validated extraction/entity-resolution change can therefore reprocess a prior document safely while stable evidence hashes continue to suppress duplicate observations.
+
 The current structured extraction contract limits a document to twelve observations. Exact evidence text must occur in exactly one supplied passage and supplied offsets must match. Missing or ambiguous anchors are rejected. Low materiality is rejected; uncertain entity or extraction confidence enters `needs_review`. Source text is passed as untrusted JSON under a system instruction that explicitly rejects prompt injection, hidden instructions and strategic inference.
 
 ## Entity and duplicate handling

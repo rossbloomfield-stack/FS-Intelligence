@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { FatalError } from "workflow";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assessSignalEligibility } from "@/lib/intelligence/signals/eligibility";
-import { getSignalIntelligenceConfig } from "@/lib/intelligence/signals/config";
+import { getSignalIntelligenceConfig, SIGNAL_PROCESSING_VERSION } from "@/lib/intelligence/signals/config";
 import { extractObservations, OBSERVATION_PROMPT_VERSION, OBSERVATION_SCHEMA_VERSION } from "@/lib/intelligence/signals/observation-extractor";
 import { resolveObservationEntity, type IntelligenceEntityCandidate } from "@/lib/intelligence/signals/entity-resolution";
 import { areDirectionsContradictory, observationSimilarity, sourceFamilyKey, type ObservationFingerprint } from "@/lib/intelligence/signals/matching";
@@ -94,7 +94,7 @@ export async function processSignalEvidence(runId: string) {
       source_family_key: sourceFamilyKey({ canonicalUrl: item.canonical_url, publisher: parent?.title ?? "unknown", title: item.title }),
       model_version: extraction.model,
       prompt_version: OBSERVATION_PROMPT_VERSION,
-      extraction_version: OBSERVATION_PROMPT_VERSION,
+      extraction_version: SIGNAL_PROCESSING_VERSION,
       schema_version: OBSERVATION_SCHEMA_VERSION,
       review_status: reviewStatus,
       rejection_reason: reviewStatus === "rejected" ? extracted.reviewReason ?? "Below R3 materiality threshold" : reviewStatus === "needs_review" ? extracted.reviewReason ?? "Entity or extraction confidence requires review" : null,
@@ -180,7 +180,7 @@ async function attachObservationToSignal(db: ReturnType<typeof createAdminClient
       confidence_score: score.confidence, confidence_components: score.confidenceComponents, source_authority_score: score.confidenceComponents.sourceAuthority,
       corroboration_count: 0, independent_source_count: 1, contradiction_count: 0, strategic_relevance: score.strategicRelevance,
       relevance_components: score.relevanceComponents, momentum: score.momentum, signal_score: score.signalScore,
-      reasoning_summary: explainScore(score), extraction_version: OBSERVATION_PROMPT_VERSION, lifecycle_status: "emerging",
+      reasoning_summary: explainScore(score), extraction_version: SIGNAL_PROCESSING_VERSION, lifecycle_status: "emerging",
       novelty_score: Math.max(1, Math.round(score.novelty * 5)), impact_score: Math.max(1, Math.round(score.strategicRelevance * 5)),
       authority_score: score.confidenceComponents.sourceAuthority, composite_score: score.signalScore / 20, scoring_version: score.scoringVersion,
     }).select("id").single();

@@ -16,6 +16,8 @@ export type SignalIntelligenceConfig = {
   signalRetrievalCount: number;
 };
 
+export const SIGNAL_PROCESSING_VERSION = "r3-pipeline-v2";
+
 export const defaultSignalIntelligenceConfig: SignalIntelligenceConfig = {
   extractionEnabled: true,
   generationEnabled: true,

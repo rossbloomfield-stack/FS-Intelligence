@@ -4,7 +4,7 @@ import { start } from "workflow/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signalProcessingWorkflow } from "@/workflows/signal-processing";
 import { OBSERVATION_SCHEMA_VERSION, OBSERVATION_PROMPT_VERSION } from "@/lib/intelligence/signals/observation-extractor";
-import { getSignalIntelligenceConfig } from "@/lib/intelligence/signals/config";
+import { getSignalIntelligenceConfig, SIGNAL_PROCESSING_VERSION } from "@/lib/intelligence/signals/config";
 
 export async function queueSignalProcessing(sourceItemId: string, trigger = "source_approval") {
   const config = getSignalIntelligenceConfig();
@@ -37,7 +37,7 @@ export async function queueSignalProcessing(sourceItemId: string, trigger = "sou
     if (created.error || !created.data) throw new Error(`Could not version source item: ${created.error?.message ?? "unknown error"}`);
     version = created.data;
   }
-  const executionKey = `r3:${sourceItemId}:${contentHash}:${OBSERVATION_PROMPT_VERSION}`;
+  const executionKey = `r3:${sourceItemId}:${contentHash}:${SIGNAL_PROCESSING_VERSION}`;
   const created = await db.from("signal_processing_runs").upsert({
     execution_key: executionKey,
     source_item_id: sourceItemId,
@@ -45,9 +45,9 @@ export async function queueSignalProcessing(sourceItemId: string, trigger = "sou
     stage: "evidence_ready",
     status: "queued",
     extraction_model: config.extractionModel,
-    extraction_version: OBSERVATION_PROMPT_VERSION,
+    extraction_version: SIGNAL_PROCESSING_VERSION,
     schema_version: OBSERVATION_SCHEMA_VERSION,
-    metadata: { trigger, versionNumber: version.version_number },
+    metadata: { trigger, versionNumber: version.version_number, promptVersion: OBSERVATION_PROMPT_VERSION },
   }, { onConflict: "execution_key", ignoreDuplicates: true }).select("id,status").maybeSingle();
   if (created.error) throw new Error(`Could not queue signal processing: ${created.error.message}`);
   let run = created.data;
@@ -59,7 +59,7 @@ export async function queueSignalProcessing(sourceItemId: string, trigger = "sou
   if (run.status === "completed" || run.status === "running") return { status: run.status, runId: run.id, workflowRunId: null };
   await db.from("signal_processing_runs").update({ status: "running", stage: "signal_eligibility", started_at: new Date().toISOString(), error_message: null }).eq("id", run.id).throwOnError();
   const workflow = await start(signalProcessingWorkflow, [run.id]);
-  await db.from("signal_processing_runs").update({ metadata: { trigger, workflowRunId: workflow.runId, versionNumber: version.version_number } }).eq("id", run.id).throwOnError();
+  await db.from("signal_processing_runs").update({ metadata: { trigger, workflowRunId: workflow.runId, versionNumber: version.version_number, promptVersion: OBSERVATION_PROMPT_VERSION } }).eq("id", run.id).throwOnError();
   return { status: "running" as const, runId: run.id, workflowRunId: workflow.runId };
 }
 

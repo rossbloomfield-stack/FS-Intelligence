@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { queueSignalProcessing } from "@/lib/intelligence/signals/queue";
+import { SIGNAL_PROCESSING_VERSION } from "@/lib/intelligence/signals/config";
 
 export async function getSignalOperationsStatus() {
   const db = createAdminClient();
@@ -33,7 +34,7 @@ export async function queueSignalBackfill(limit: number, sourceClass?: string) {
   for (const item of items.data ?? []) {
     const source = first(item.sources);
     if (sourceClass && source?.source_class !== sourceClass) continue;
-    const current = await db.from("signal_processing_runs").select("id,status").eq("source_item_id", item.id).in("status", ["queued", "running", "completed", "needs_review"]).limit(1).maybeSingle();
+    const current = await db.from("signal_processing_runs").select("id,status").eq("source_item_id", item.id).eq("extraction_version", SIGNAL_PROCESSING_VERSION).in("status", ["queued", "running", "completed", "needs_review"]).limit(1).maybeSingle();
     if (!current.data) candidates.push(item.id);
     if (candidates.length >= limit) break;
   }
