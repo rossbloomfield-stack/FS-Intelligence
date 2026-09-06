@@ -19,7 +19,7 @@ export default async function Page() {
       <div className="grid gap-5 lg:grid-cols-3">
         <AdminCard title="Generate report" body="Start the same durable workflow used by the weekly schedule." action="Generate report now" />
         <AdminCard title="Run progress" body="Agent and workflow status persists across retries and deployments." action="Open latest run" href="/intelligence/admin/runs/fixture" />
-        <AdminCard title="Draft review" body="Publication remains blocked until QA passes and an administrator approves." action="Review draft" />
+        <AdminCard title="Signal intelligence" body="Inspect extraction quality, provenance, unresolved entities and the controlled R3 backfill." action="Review signals" href="/intelligence/admin/signals" />
       </div>
       <IngestionOperations initialStatus={ingestionStatus} />
     </SectionPage>

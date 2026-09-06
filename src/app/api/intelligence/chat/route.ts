@@ -10,6 +10,7 @@ import { planIntelligenceQuery } from "@/lib/intelligence/query-planner";
 import { retrieveIntelligenceEvidence } from "@/lib/intelligence/retrieval-orchestrator";
 import { completeRetrievalDiagnostic,persistRetrievalDiagnostic } from "@/lib/intelligence/retrieval-diagnostics";
 import { buildStructuredAnswer,type StructuredKnowledge } from "@/lib/intelligence/structured-answer";
+import { retrieveIntelligenceSignals } from "@/lib/intelligence/signals/retriever";
 
 export const maxDuration=30;
 const requestSchema=z.object({id:z.string().uuid().optional(),messages:z.array(z.object({id:z.string(),role:z.enum(["user","assistant","system"]),parts:z.array(z.unknown())}).passthrough()).min(1)});
@@ -69,11 +70,12 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const domainAvailability=await loadDomainAvailability(supabase,plan.evidenceNeeds);
  const retrieval=await retrieveIntelligenceEvidence({db:supabase,question:contextualQuestion,plan,domainAvailability});
  const {references,evidence,gaps}=retrieval;
- const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references);
+ const marketSignals=await retrieveIntelligenceSignals({db:supabase,question:contextualQuestion,plan,references});
+ const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references,marketSignals);
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
  const title=question.length>72?`${question.slice(0,69)}…`:question;
  const conversationId=body.id??crypto.randomUUID();
- const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps,retrievalMetrics:retrieval.metrics},updated_at:new Date().toISOString()},{onConflict:"id"});
+ const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps,retrievalMetrics:retrieval.metrics,signalMetrics:{count:marketSignals.length,ids:marketSignals.map(signal=>signal.id)}},updated_at:new Date().toISOString()},{onConflict:"id"});
  assertSupabaseSuccess(conversationWrite,"conversations.upsert");
  const userMessageWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"user",content:{text:question},intent:plan.intent});
  assertSupabaseSuccess(userMessageWrite,"conversation_messages.insert_user");
@@ -116,7 +118,7 @@ async function loadDomainAvailability(supabase:Awaited<ReturnType<typeof createC
  return Object.fromEntries(results);
 }
 
-async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof createClient>>,plan:ReturnType<typeof planIntelligenceQuery>,references:import("@/lib/intelligence/evidence").EvidenceReference[]):Promise<StructuredKnowledge>{
+async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof createClient>>,plan:ReturnType<typeof planIntelligenceQuery>,references:import("@/lib/intelligence/evidence").EvidenceReference[],marketSignals:import("@/lib/intelligence/signals/retriever").RetrievedSignalContext[]):Promise<StructuredKnowledge>{
  const organisationIds=plan.organisations.map(item=>item.id);
  const marketWide=!organisationIds.length&&["market_overview","market_trend","strategic_recommendation","future_scenario","financial_performance","digital_experience","ai_transformation","advice","distribution"].includes(plan.intent);
  const emptyResult={data:[],error:null};
@@ -157,5 +159,5 @@ async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof create
  const referenceBySource=new Map(references.map(reference=>[reference.sourceId,reference.id]));
  const productCards=(products.data??[]).map(product=>({id:product.id,provider:organisationNames.get(product.organisation_id)??"Organisation",name:product.name,category:product.category,features:product.key_features??[],journey:product.online_journey,pricing:product.pricing??product.fees,sourceReferenceId:referenceBySource.get(product.source_id)??null,thumbnailUrl:null}));
  const withName=<T extends {organisation_id:string}>(item:T)=>({...item,organisation_name:organisationNames.get(item.organisation_id)??"Organisation"});
- return {strategyProfiles:(strategies.data??[]).map(withName),financialMetrics:(metrics.data??[]).map(item=>withName({...item,value:Number(item.value)})),digitalCapabilities:(capabilities.data??[]).map(withName),digitalBenchmarks:(digital.data??[]).map(item=>({...item,organisation_name:item.organisation_id?organisationNames.get(item.organisation_id)??"Organisation":undefined})),aiInitiatives:(ai.data??[]).map(withName),competitorUpdates:(updates.data??[]).map(withName),timelineEvents,products:productCards};
+ return {strategyProfiles:(strategies.data??[]).map(withName),financialMetrics:(metrics.data??[]).map(item=>withName({...item,value:Number(item.value)})),digitalCapabilities:(capabilities.data??[]).map(withName),digitalBenchmarks:(digital.data??[]).map(item=>({...item,organisation_name:item.organisation_id?organisationNames.get(item.organisation_id)??"Organisation":undefined})),aiInitiatives:(ai.data??[]).map(withName),competitorUpdates:(updates.data??[]).map(withName),timelineEvents,products:productCards,marketSignals};
 }
