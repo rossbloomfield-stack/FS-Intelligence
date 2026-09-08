@@ -45,7 +45,7 @@ export function IngestionOperations({
       const response = await fetch("/api/admin/ingestion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, limit: action === "discover" ? 4 : 5 }),
+        body: JSON.stringify({ action, limit: action === "discover" ? 4 : 10 }),
       });
       const result = (await response.json()) as {
         started?: unknown[];
@@ -122,9 +122,10 @@ export function IngestionOperations({
             Evidence ingestion and review
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-            Fetch-approved targets are processed into bounded passages. Nothing
-            becomes available to conversation until an administrator verifies
-            the source and publication date.
+            Fetch-approved targets are processed into bounded passages. Complete,
+            dated evidence from verified Grade-A Tier 1/2 primary sources enters
+            retrieval automatically; ambiguous or incomplete items remain here
+            for administrator review.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -142,7 +143,7 @@ export function IngestionOperations({
             disabled={busy !== null}
             className="min-h-11 rounded-lg bg-[var(--purple)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy === "ingest" ? "Starting…" : "Process next five"}
+            {busy === "ingest" ? "Starting…" : "Process next ten"}
           </button>
         </div>
       </div>

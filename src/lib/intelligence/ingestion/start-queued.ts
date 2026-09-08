@@ -6,7 +6,7 @@ import { sourceIngestionWorkflow } from "@/workflows/source-ingestion";
 export async function startQueuedSourceIngestion(limit: number) {
   const db = createAdminClient();
   const { data: claimed, error } = await db.rpc("claim_source_ingestion_runs", {
-    p_limit: Math.max(1, Math.min(limit, 5)),
+    p_limit: Math.max(1, Math.min(limit, 20)),
   });
   if (error) throw new Error(`Could not claim ingestion queue: ${error.message}`);
 

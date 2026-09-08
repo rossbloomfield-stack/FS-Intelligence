@@ -2,6 +2,7 @@ import { authenticateAdminRequest } from "@/lib/supabase/admin-api";
 import { startDueSourceDiscovery } from "@/lib/intelligence/ingestion/start-discovery";
 import { startQueuedSourceIngestion } from "@/lib/intelligence/ingestion/start-queued";
 import { getIngestionOperationsStatus } from "@/lib/intelligence/ingestion/operations";
+import { promoteTrustedPrimaryEvidence } from "@/lib/intelligence/ingestion/trusted-primary";
 import { startSourceIngestionSchema } from "@/schemas/source-ingestion";
 
 export async function GET() {
@@ -18,9 +19,17 @@ export async function POST(request: Request) {
   );
   if (!parsed.success)
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  const trustedEvidence = await promoteTrustedPrimaryEvidence(50).catch((error) => ({
+    requested: 50,
+    promoted: [],
+    error: error instanceof Error ? error.message : "Trusted evidence promotion unavailable",
+  }));
   const result =
     parsed.data.action === "discover"
       ? await startDueSourceDiscovery(parsed.data.limit)
       : await startQueuedSourceIngestion(parsed.data.limit);
-  return Response.json(result, { status: result.started.length ? 202 : 200 });
+  return Response.json(
+    { ...result, trustedEvidence },
+    { status: result.started.length ? 202 : 200 },
+  );
 }

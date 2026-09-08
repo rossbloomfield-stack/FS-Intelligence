@@ -3731,6 +3731,13 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: { id: string }[]
       }
+      promote_trusted_primary_source_items: {
+        Args: { p_item_ids?: string[] | null; p_limit?: number }
+        Returns: {
+          evidence_source_id: string
+          source_item_id: string
+        }[]
+      }
       review_source_item: {
         Args: {
           p_decision: string

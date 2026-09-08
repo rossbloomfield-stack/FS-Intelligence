@@ -68,7 +68,7 @@ Verified external source
 4. Add bounded, indexed graph-neighbourhood retrieval and align every relationship supplied to synthesis with approved source references.
 5. Replace static organisation profiles with living database-backed dossiers while retaining the existing Irish Life interface.
 6. Add authenticated coverage and relationship diagnostics for administrators.
-7. Activate the existing 634 verified, terms-cleared Grade-A targets in controlled batches; retain human evidence approval before retrieval.
+7. Activate the existing 634 verified, terms-cleared Grade-A targets in controlled batches. Promote complete, dated Tier 1/2 primary evidence through a deterministic trusted-source policy; retain human review for every exception.
 8. Add R4 graph, provenance, temporal, security and retrieval regression tests plus a 75-question evaluation set.
 
 ## Release guardrails
@@ -119,4 +119,6 @@ The first deterministic relationship backfill produced three inspectable edges f
 - Production build: passes. The existing `unpdf` workflow dependency emits a non-blocking webpack `import.meta` warning.
 - Supabase advisors: no new R4 security-policy finding and no remaining unindexed R4 foreign key. Existing project-level warnings about `pg_net`, leaked-password protection and six unrelated RLS-without-policy tables are outside this release and should be handled separately.
 
-The 20,000–30,000 evidence target is not yet achieved. Reaching it requires the queued sources to be fetched, reviewed and accepted over controlled production batches. R4 does not manufacture records or bypass the approval control to claim the target. Relationship merge and entity-merge storage are present; a full collision-safe entity-merge operator is intentionally held for a focused follow-up rather than risking provenance loss in this release.
+The 20,000–30,000 evidence target is not yet achieved. The initial R4 deployment exposed a throughput defect: 55 parsed documents were withheld behind one-at-a-time review and 41 queued runs had not started. The corpus-activation follow-up raised the bounded worker ceiling from 5 to 20, schedules 10 workers and 50 new targets per daily cycle, and introduced a narrow automatic promotion policy for complete, dated evidence from endpoint-verified, terms-cleared Grade-A Tier 1/2 primary sources. Missing dates, truncated extracts, non-primary sources and any weaker provenance remain in human review.
+
+After applying the activation migration, approved production evidence increased from 15 to 35 documents and from 21 to 112 retrieval-ready passages; 20 promotions were recorded in the audit log. This is a concrete improvement, not completion of the R4 coverage target. Publisher diversity will improve as the outstanding ingestion queue moves beyond the five publishers processed so far.

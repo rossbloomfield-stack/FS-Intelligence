@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const startSourceIngestionSchema = z.object({
   action: z.enum(["ingest", "discover"]).default("ingest"),
-  limit: z.number().int().min(1).max(5).default(2),
+  limit: z.number().int().min(1).max(20).default(5),
 });
 
 export const reviewSourceItemSchema = z.object({

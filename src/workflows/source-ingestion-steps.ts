@@ -416,6 +416,29 @@ export async function completeSourceIngestionRun(
     })
     .eq("id", context.connectorId)
     .throwOnError();
+
+  if (persisted.alreadyApproved) {
+    return { retrievalReady: true, approvalPolicy: "previously_approved" };
+  }
+  if (requiresDateReview) {
+    return { retrievalReady: false, approvalPolicy: "human_review" };
+  }
+
+  const { data: promoted, error: promotionError } = await db.rpc(
+    "promote_trusted_primary_source_items",
+    { p_limit: 1, p_item_ids: [persisted.sourceItemId] },
+  );
+  if (promotionError) {
+    throw new Error(
+      `Could not evaluate trusted-primary promotion: ${promotionError.message}`,
+    );
+  }
+  return {
+    retrievalReady: Boolean(promoted?.length),
+    approvalPolicy: promoted?.length
+      ? "r4_trusted_primary_v1"
+      : "human_review",
+  };
 }
 
 export async function failSourceIngestionRun(runId: string, message: string) {

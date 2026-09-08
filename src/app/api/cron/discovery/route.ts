@@ -4,6 +4,7 @@ import { isDublinEight } from "@/lib/research/reporting-period";
 import { queueSignalBackfill } from "@/lib/intelligence/signals/operations";
 import { backfillKnowledgeGraph, queueR4SourceBackfill, refreshGraphOperationalMetrics } from "@/lib/intelligence/graph/operations";
 import { startQueuedSourceIngestion } from "@/lib/intelligence/ingestion/start-queued";
+import { promoteTrustedPrimaryEvidence } from "@/lib/intelligence/ingestion/trusted-primary";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -12,8 +13,13 @@ export async function GET(request: Request) {
   }
 
   const force = new URL(request.url).searchParams.get("force") === "1";
-  const signalBackfill = await queueSignalBackfill(3).catch((error) => ({
-    requested: 3,
+  const trustedEvidence = await promoteTrustedPrimaryEvidence(50).catch((error) => ({
+    requested: 50,
+    promoted: [],
+    error: error instanceof Error ? error.message : "Trusted evidence promotion unavailable",
+  }));
+  const signalBackfill = await queueSignalBackfill(10).catch((error) => ({
+    requested: 10,
     queued: 0,
     error: error instanceof Error ? error.message : "Signal backfill unavailable",
   }));
@@ -28,20 +34,21 @@ export async function GET(request: Request) {
       reason: "Outside the 08:00 Europe/Dublin schedule window",
       signalBackfill,
       graphBackfill,
+      trustedEvidence,
     });
   }
 
   const [discovery, embeddings, sourceBackfill] = await Promise.all([
     startDueSourceDiscovery(4),
     backfillApprovedEmbeddings(50),
-    queueR4SourceBackfill(20),
+    queueR4SourceBackfill(50),
   ]);
-  const ingestion = await startQueuedSourceIngestion(5);
+  const ingestion = await startQueuedSourceIngestion(10);
   const graphMetrics = await refreshGraphOperationalMetrics().catch((error) => ({
     error: error instanceof Error ? error.message : "Graph metrics unavailable",
   }));
   return Response.json(
-    { skipped: false, forced: force, discovery, embeddings, signalBackfill, graphBackfill, sourceBackfill, ingestion, graphMetrics },
+    { skipped: false, forced: force, discovery, embeddings, trustedEvidence, signalBackfill, graphBackfill, sourceBackfill, ingestion, graphMetrics },
     { status: discovery.started.length || ingestion.started.length ? 202 : 200 },
   );
 }

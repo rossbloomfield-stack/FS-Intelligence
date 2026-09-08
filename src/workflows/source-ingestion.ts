@@ -13,12 +13,19 @@ export async function sourceIngestionWorkflow(runId: string) {
     const context = await loadSourceIngestionContext(runId);
     const document = await fetchAndParseSource(context);
     const persisted = await persistParsedSource(context, document);
-    await completeSourceIngestionRun(context, document, persisted);
+    const completion = await completeSourceIngestionRun(
+      context,
+      document,
+      persisted,
+    );
     return {
       runId,
       sourceItemId: persisted.sourceItemId,
       passageCount: persisted.passageCount,
-      status: "awaiting_review" as const,
+      status: completion.retrievalReady
+        ? ("retrieval_ready" as const)
+        : ("awaiting_review" as const),
+      approvalPolicy: completion.approvalPolicy,
     };
   } catch (error) {
     const message =

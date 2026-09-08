@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   assertAllowedIngestionUrl,
   buildAllowedHosts,
@@ -59,5 +60,32 @@ describe("R5.3 bounded source ingestion", () => {
     });
     expect(selected).toHaveLength(2);
     expect(selected.every((passage) => /strategy|capital/i.test(passage.content))).toBe(true);
+  });
+
+  it("fast-tracks only complete evidence from verified primary sources", () => {
+    const migration = readFileSync(
+      "supabase/migrations/20260908213000_r4_corpus_activation.sql",
+      "utf8",
+    );
+    expect(migration).toContain("parent.primary_source");
+    expect(migration).toContain("parent.credibility_tier <= 2");
+    expect(migration).toContain("target.readiness_grade = 'A'");
+    expect(migration).toContain("connector.endpoint_verified");
+    expect(migration).toContain("not connector.terms_review_required");
+    expect(migration).toContain("item.publication_date is not null");
+    expect(migration).toContain("extractionTruncated");
+    expect(migration).toContain("source_item_auto_approved");
+  });
+
+  it("keeps expanded ingestion bounded and service-role only", () => {
+    const migration = readFileSync(
+      "supabase/migrations/20260908213000_r4_corpus_activation.sql",
+      "utf8",
+    );
+    expect(migration).toContain("least(coalesce(p_limit, 5), 20)");
+    expect(migration).toContain("current_user <> 'service_role'");
+    expect(migration).toContain(
+      "revoke all on function public.promote_trusted_primary_source_items",
+    );
   });
 });
