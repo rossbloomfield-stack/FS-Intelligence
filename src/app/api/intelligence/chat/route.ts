@@ -11,6 +11,7 @@ import { retrieveIntelligenceEvidence } from "@/lib/intelligence/retrieval-orche
 import { completeRetrievalDiagnostic,persistRetrievalDiagnostic } from "@/lib/intelligence/retrieval-diagnostics";
 import { buildStructuredAnswer,type StructuredKnowledge } from "@/lib/intelligence/structured-answer";
 import { retrieveIntelligenceSignals } from "@/lib/intelligence/signals/retriever";
+import { retrieveKnowledgeGraph } from "@/lib/intelligence/graph/retriever";
 
 export const maxDuration=30;
 const requestSchema=z.object({id:z.string().uuid().optional(),messages:z.array(z.object({id:z.string(),role:z.enum(["user","assistant","system"]),parts:z.array(z.unknown())}).passthrough()).min(1)});
@@ -71,17 +72,19 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const retrieval=await retrieveIntelligenceEvidence({db:supabase,question:contextualQuestion,plan,domainAvailability});
  const {references,evidence,gaps}=retrieval;
  const marketSignals=await retrieveIntelligenceSignals({db:supabase,question:contextualQuestion,plan,references});
+ const graph=await retrieveKnowledgeGraph({db:supabase,organisationIds:plan.organisations.map(item=>item.id),references});
  const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references,marketSignals);
+ structuredKnowledge.graphRelationships=graph.relationships;
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
  const title=question.length>72?`${question.slice(0,69)}…`:question;
  const conversationId=body.id??crypto.randomUUID();
- const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps,retrievalMetrics:retrieval.metrics,signalMetrics:{count:marketSignals.length,ids:marketSignals.map(signal=>signal.id)}},updated_at:new Date().toISOString()},{onConflict:"id"});
+ const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps,retrievalMetrics:retrieval.metrics,signalMetrics:{count:marketSignals.length,ids:marketSignals.map(signal=>signal.id)},graphMetrics:{entityCount:graph.entityIds.length,relationshipCount:graph.relationships.length,pathCount:graph.graphPaths.length,durationMs:graph.durationMs}},updated_at:new Date().toISOString()},{onConflict:"id"});
  assertSupabaseSuccess(conversationWrite,"conversations.upsert");
  const userMessageWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"user",content:{text:question},intent:plan.intent});
  assertSupabaseSuccess(userMessageWrite,"conversation_messages.insert_user");
  if(organisations.length){const entityWrite=await supabase.from("conversation_entities").upsert(organisations.map(item=>({conversation_id:conversationId,entity_type:"organisation",entity_id:item.id,entity_label:item.name})),{onConflict:"conversation_id,entity_type,entity_id",ignoreDuplicates:true});assertSupabaseSuccess(entityWrite,"conversation_entities.upsert")}
  const diagnosticId=crypto.randomUUID();
- await persistRetrievalDiagnostic({id:diagnosticId,userId:user.id,conversationId,question,plan,subqueries:retrieval.subqueries,retrieval,retrievalDurationMs:retrieval.retrievalDurationMs,semanticStatus:retrieval.semanticStatus,config:retrieval.config}).catch(error=>logRouteError(error,requestId,"retrieval_diagnostics_insert"));
+ await persistRetrievalDiagnostic({id:diagnosticId,userId:user.id,conversationId,question,plan,subqueries:retrieval.subqueries,retrieval,retrievalDurationMs:retrieval.retrievalDurationMs,semanticStatus:retrieval.semanticStatus,config:retrieval.config,graph}).catch(error=>logRouteError(error,requestId,"retrieval_diagnostics_insert"));
  let completedAnalysis:IntelligenceAnalysis|null=null;
  let generationStartedAt=0;
  const stream=createUIMessageStream<IntelligenceUIMessage>({originalMessages:body.messages,execute:async({writer})=>{
@@ -97,7 +100,7 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
   writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"complete",label:"Analysis complete"}});
   writer.write({type:"text-start",id:"answer"});writer.write({type:"text-delta",id:"answer",delta:`${analysis.headline}\n\n${analysis.executiveSummary}`});writer.write({type:"text-end",id:"answer"});
  },onEnd:async({responseMessage})=>{try{const assistantWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"assistant",content:responseMessage,confidence:evidence.confidence,freshness:evidence.freshness,latency_ms:Date.now()-startedAt}).select("id").single();assertSupabaseSuccess(assistantWrite,"conversation_messages.insert_assistant");const stored=assistantWrite.data;if(stored&&references.length){const referenceWrite=await supabase.from("conversation_references").insert(references.map(item=>({conversation_id:conversationId,message_id:stored.id,source_id:item.sourceId,reference_snapshot:item,rank:item.rank,support_strength:item.supportStrength==="supporting"?"direct":item.supportStrength==="counter"?"corroborating":"contextual"})));assertSupabaseSuccess(referenceWrite,"conversation_references.insert")}if(completedAnalysis){await completeRetrievalDiagnostic({id:diagnosticId,analysis:completedAnalysis,retrieval,generationDurationMs:Date.now()-generationStartedAt})}}catch(error){logRouteError(error,requestId,"stream_on_end")}}});
- console.log(JSON.stringify({level:"info",message:"Intelligence chat response started",route:"/api/intelligence/chat",requestId,conversationId,durationMs:Date.now()-startedAt,retrievalDurationMs:retrieval.retrievalDurationMs,referenceCount:references.length,evidenceItemCount:retrieval.metrics.selectedEvidenceCount,uniqueDocumentCount:retrieval.metrics.uniqueDocumentCount,uniqueDomainCount:retrieval.metrics.uniqueDomainCount,semanticStatus:retrieval.semanticStatus,confidence:evidence.confidence,coverage:evidence.coverage}));
+ console.log(JSON.stringify({level:"info",message:"Intelligence chat response started",route:"/api/intelligence/chat",requestId,conversationId,durationMs:Date.now()-startedAt,retrievalDurationMs:retrieval.retrievalDurationMs,graphRetrievalDurationMs:graph.durationMs,graphRelationshipCount:graph.relationships.length,referenceCount:references.length,evidenceItemCount:retrieval.metrics.selectedEvidenceCount,uniqueDocumentCount:retrieval.metrics.uniqueDocumentCount,uniqueDomainCount:retrieval.metrics.uniqueDomainCount,semanticStatus:retrieval.semanticStatus,confidence:evidence.confidence,coverage:evidence.coverage}));
  return createUIMessageStreamResponse({stream,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Request-Id":requestId}});
 }
 

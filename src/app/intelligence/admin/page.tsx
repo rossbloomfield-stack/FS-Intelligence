@@ -16,10 +16,11 @@ export default async function Page() {
       title="Intelligence operations"
       description="Generate, monitor, review and approve intelligence and its supporting evidence."
     >
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-4">
         <AdminCard title="Generate report" body="Start the same durable workflow used by the weekly schedule." action="Generate report now" />
         <AdminCard title="Run progress" body="Agent and workflow status persists across retries and deployments." action="Open latest run" href="/intelligence/admin/runs/fixture" />
         <AdminCard title="Signal intelligence" body="Inspect extraction quality, provenance, unresolved entities and the controlled R3 backfill." action="Review signals" href="/intelligence/admin/signals" />
+        <AdminCard title="Market graph" body="Inspect R4 source coverage, canonical entities, relationships and graph-processing health." action="Open graph diagnostics" href="/intelligence/admin/graph" />
       </div>
       <IngestionOperations initialStatus={ingestionStatus} />
     </SectionPage>

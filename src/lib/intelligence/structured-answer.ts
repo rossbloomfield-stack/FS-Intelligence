@@ -1,6 +1,7 @@
 import type { EvidenceReference } from "@/lib/intelligence/evidence";
 import type { IntelligenceQueryPlan,ResolvedOrganisation } from "@/lib/intelligence/query-planner";
 import type { RetrievedSignalContext } from "@/lib/intelligence/signals/retriever";
+import type { GraphRelationshipContext } from "@/schemas/knowledge-graph";
 
 export type CompanyIntelligenceCard={id:string;slug:string;name:string;sector:string;jurisdiction:string|null;strategySummary:string|null;digitalAssessment:string|null;aiAssessment:string|null;strategicTheme:string|null;financialHighlights:string[];evidenceReferenceIds:string[]};
 export type ProductIntelligenceCard={id:string;provider:string;name:string;category:string;features:string[];journey:string|null;pricing:string|null;sourceReferenceId:string|null;thumbnailUrl:string|null};
@@ -21,6 +22,7 @@ export type StructuredKnowledge={
  timelineEvents:TimelineItem[];
  products:ProductIntelligenceCard[];
  marketSignals?:RetrievedSignalContext[];
+ graphRelationships?:GraphRelationshipContext[];
 };
 
 export function buildStructuredAnswer(plan:IntelligenceQueryPlan,knowledge:StructuredKnowledge,references:EvidenceReference[]):StructuredAnswer|null{

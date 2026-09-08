@@ -7,6 +7,7 @@ import type { RetrievalSubquery } from "@/lib/intelligence/query-decomposition";
 import type { RetrievalConfig } from "@/lib/intelligence/retrieval-config";
 import type { RetrievalResult } from "@/lib/intelligence/retriever";
 import type { SemanticStatus } from "@/lib/intelligence/retrieval-orchestrator";
+import type { GraphRelationshipContext } from "@/schemas/knowledge-graph";
 
 export async function persistRetrievalDiagnostic({
   id,
@@ -19,6 +20,7 @@ export async function persistRetrievalDiagnostic({
   retrievalDurationMs,
   semanticStatus,
   config,
+  graph,
 }: {
   id: string;
   userId: string;
@@ -30,6 +32,13 @@ export async function persistRetrievalDiagnostic({
   retrievalDurationMs: number;
   semanticStatus: SemanticStatus;
   config: RetrievalConfig;
+  graph?: {
+    entityIds: string[];
+    relationshipIds: string[];
+    graphPaths: Array<Record<string, unknown>>;
+    relationships: GraphRelationshipContext[];
+    durationMs: number;
+  };
 }) {
   const db = createAdminClient();
   const { error } = await db.from("retrieval_diagnostics").insert({
@@ -64,6 +73,12 @@ export async function persistRetrievalDiagnostic({
     })),
     reranking_scores: retrieval.diagnostics,
     retrieval_config: config,
+    resolved_entity_ids: graph?.entityIds ?? [],
+    graph_paths: graph?.graphPaths ?? [],
+    relationship_ids: graph?.relationshipIds ?? [],
+    graph_relationship_count: graph?.relationships.length ?? 0,
+    graph_entity_count: new Set((graph?.relationships ?? []).flatMap((item) => [item.sourceEntityId,item.targetEntityId])).size,
+    graph_retrieval_duration_ms: graph?.durationMs ?? 0,
   });
   if (error) throw new Error(`Could not persist retrieval diagnostics: ${error.message}`);
 }

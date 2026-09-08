@@ -7,6 +7,8 @@ import { extractObservations, OBSERVATION_PROMPT_VERSION, OBSERVATION_SCHEMA_VER
 import { resolveObservationEntity, type IntelligenceEntityCandidate } from "@/lib/intelligence/signals/entity-resolution";
 import { areDirectionsContradictory, observationSimilarity, sourceFamilyKey, type ObservationFingerprint } from "@/lib/intelligence/signals/matching";
 import { explainScore, lifecycleFor, scoreSignal } from "@/lib/intelligence/signals/scoring";
+import { getKnowledgeGraphConfig } from "@/lib/intelligence/graph/config";
+import { processObservationRelationships } from "@/lib/intelligence/graph/operations";
 
 export async function processSignalEvidence(runId: string) {
   "use step";
@@ -125,6 +127,16 @@ export async function processSignalEvidence(runId: string) {
     else if (outcome.updated) updatedCount += 1;
     if (outcome.duplicate) duplicateCount += 1;
     if (outcome.contradiction) contradictionCount += 1;
+    if (getKnowledgeGraphConfig().relationshipExtractionEnabled) {
+      await processObservationRelationships(observationWrite.data.id).catch((error) => {
+        console.error(JSON.stringify({
+          level: "error",
+          message: "R4 relationship processing failed without blocking R3 signal persistence",
+          observationId: observationWrite.data.id,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      });
+    }
   }
   await db.from("signal_processing_runs").update({
     stage: "complete", status: unresolvedCount ? "needs_review" : "completed",

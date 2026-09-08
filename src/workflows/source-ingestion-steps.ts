@@ -19,6 +19,7 @@ import type {
   PersistedSourceDocument,
   SourceIngestionContext,
 } from "@/schemas/source-ingestion";
+import { resolveObservationEntity, type IntelligenceEntityCandidate } from "@/lib/intelligence/signals/entity-resolution";
 
 // Annual reports are often image-heavy even when we retain only a bounded text
 // subset. Keep the network ceiling finite while allowing the monitored banks'
@@ -26,13 +27,6 @@ import type {
 const MAX_FETCH_BYTES = 48 * 1024 * 1024;
 const MAX_PDF_PAGES = 160;
 const MAX_PDF_EXTRACTION_MS = 45_000;
-const organisationBySourceKey: Record<string, string> = {
-  "SRC-0155": "canada-life",
-  "SRC-0156": "zurich-ireland",
-  "SRC-0167": "aib",
-  "SRC-0168": "bank-of-ireland",
-  "SRC-0192": "aviva-ireland",
-};
 
 export async function loadSourceIngestionContext(
   runId: string,
@@ -342,29 +336,37 @@ export async function persistParsedSource(
       `Could not persist evidence passages: ${chunkError.message}`,
     );
 
-  const organisationSlug = organisationBySourceKey[context.sourceKey];
-  if (organisationSlug) {
-    const { data: organisation } = await db
-      .from("organisations")
-      .select("id")
-      .eq("slug", organisationSlug)
-      .maybeSingle();
-    if (organisation) {
-      await db
-        .from("source_item_organisations")
-        .upsert({
-          source_item_id: item.id,
-          organisation_id: organisation.id,
-          relationship: "subject",
-        })
-        .throwOnError();
-    }
+  const organisationId = await resolveSourceOrganisation(db, context.sourceTitle);
+  if (organisationId) {
+    await db
+      .from("source_item_organisations")
+      .upsert({ source_item_id: item.id, organisation_id: organisationId, relationship: "subject" })
+      .throwOnError();
   }
   return {
     sourceItemId: item.id,
     passageCount: document.passages.length,
     alreadyApproved: false,
   };
+}
+
+async function resolveSourceOrganisation(db: ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>, sourceTitle: string) {
+  const [{ data: entities, error: entityError }, { data: aliases, error: aliasError }] = await Promise.all([
+    db.from("intelligence_entities").select("id,canonical_name,organisation_id,primary_geography,geography").eq("entity_type", "organisation").eq("active", true),
+    db.from("intelligence_entity_aliases").select("entity_id,alias"),
+  ]);
+  if (entityError || aliasError) return null;
+  const aliasMap = new Map<string, string[]>();
+  for (const alias of aliases ?? []) aliasMap.set(alias.entity_id, [...(aliasMap.get(alias.entity_id) ?? []), alias.alias]);
+  const candidates: IntelligenceEntityCandidate[] = (entities ?? []).map((entity) => ({
+    id: entity.id,
+    canonicalName: entity.canonical_name,
+    aliases: aliasMap.get(entity.id) ?? [],
+    geography: entity.primary_geography ?? entity.geography,
+  }));
+  const match = resolveObservationEntity(sourceTitle, candidates, 0.9);
+  if (!match.id || match.ambiguous || match.confidence < 0.9) return null;
+  return entities?.find((entity) => entity.id === match.id)?.organisation_id ?? null;
 }
 
 export async function completeSourceIngestionRun(

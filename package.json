@@ -13,6 +13,7 @@
     "test:evals": "vitest run tests/evals.test.ts",
     "test:r1-retrieval": "vitest run tests/r1-retrieval-intelligence.test.ts",
     "test:r3-signals": "vitest run tests/r3-signal-intelligence.test.ts",
+    "test:r4-graph": "vitest run tests/r4-knowledge-graph.test.ts",
     "eval:r1-live": "RUN_R1_LIVE_EVAL=true vitest run tests/r1-retrieval-live.test.ts --reporter=verbose",
     "intelligence:import": "node scripts/intelligence/import-market-intelligence.mjs",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"

@@ -49,6 +49,7 @@ function buildPrompt(question:string,conversationContext:string[],plan:Intellige
 function compactKnowledge(knowledge:StructuredKnowledge){return {
  strategyProfiles:knowledge.strategyProfiles.slice(0,12),financialMetrics:knowledge.financialMetrics.slice(0,18),digitalCapabilities:knowledge.digitalCapabilities.slice(0,18),digitalBenchmarks:knowledge.digitalBenchmarks.slice(0,12),aiInitiatives:knowledge.aiInitiatives.slice(0,12),competitorUpdates:knowledge.competitorUpdates.slice(0,12),timelineEvents:knowledge.timelineEvents.slice(0,15),products:knowledge.products.slice(0,12),
  marketSignals:(knowledge.marketSignals??[]).slice(0,12),
+ graphRelationships:(knowledge.graphRelationships??[]).slice(0,24),
 };}
 
 const systemInstructions=`You are a senior financial-services strategy analyst specialising in Ireland. Produce decision-useful analysis, not a source listing.
@@ -67,6 +68,8 @@ Rules:
 - Avoid generic consulting language, repeated source summaries and recommendations unsupported by the evidence.
 - Synthesize across passages and structured facts. Do not answer as a list of source descriptions.
 - Use the hierarchy Evidence → Signal → Pattern → Interpretation → Implication. A structured signal is an assessment, not source evidence; cite its linked reference IDs and test it against the underlying passages.
+- Use graph relationships only when they retain one or more supplied reference IDs. Treat inferred relationships as interpretations and state their uncertainty. Connect entities across evidence categories where that materially improves the answer.
+- For multi-entity questions, explain relevant relationship paths and time validity; never imply that absence from the graph proves absence in the market.
 - Challenge the user's premise where the evidence and signals do not establish it. Surface contradictory signals and material evidence gaps.
 - For strategic or comparison questions, provide enough context to explain the pattern, differences, implications and uncertainties; use the available evidence fully without padding.
 - For a daily briefing, rank up to five developments by likely CEO decision relevance, explain why each matters, and state its publication date. Do not describe older background material as today's news.
