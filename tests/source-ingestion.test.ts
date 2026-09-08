@@ -88,4 +88,15 @@ describe("R5.3 bounded source ingestion", () => {
       "revoke all on function public.promote_trusted_primary_source_items",
     );
   });
+
+  it("accepts only substantial material passages from bounded official web pages", () => {
+    const migration = readFileSync(
+      "supabase/migrations/20260908214500_r4_trusted_bounded_web_evidence.sql",
+      "utf8",
+    );
+    expect(migration).toContain("item.content_type = 'text/html'");
+    expect(migration).toContain("material_chunk.token_count >= 250");
+    expect(migration).toContain("relevanceScore");
+    expect(migration).toContain(">= 20");
+  });
 });
