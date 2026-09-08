@@ -8,6 +8,7 @@ import {
   chunkText,
   extractHtmlLinks,
   extractHtmlPublicationDate,
+  extractPublicationDateFromUrl,
   extractHtmlTitle,
   normaliseCanonicalUrl,
   selectDocumentCandidate,
@@ -180,7 +181,9 @@ export async function fetchAndParseSource(
       canonicalUrl: normaliseCanonicalUrl(selected.url),
       title: context.targetTitle,
       contentType: "application/pdf",
-      publicationDate: context.discoveredPublicationDate,
+      publicationDate:
+        context.discoveredPublicationDate ??
+        extractPublicationDateFromUrl(selected.url),
       contentHash: sha256(selected.body),
       bytesFetched:
         first.body.byteLength +
@@ -219,7 +222,9 @@ export async function fetchAndParseSource(
     title: extractHtmlTitle(html) ?? context.targetTitle,
     contentType: "text/html",
     publicationDate:
-      extractHtmlPublicationDate(html) ?? context.discoveredPublicationDate,
+      extractHtmlPublicationDate(html) ??
+      context.discoveredPublicationDate ??
+      extractPublicationDateFromUrl(selected.url),
     contentHash: sha256(selected.body),
     bytesFetched:
       first.body.byteLength +

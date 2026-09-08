@@ -160,11 +160,52 @@ export function extractHtmlPublicationDate(html: string) {
   return null;
 }
 
+export function extractPublicationDateFromUrl(value: string) {
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(new URL(value).pathname);
+  } catch {
+    return null;
+  }
+  const yearFirst = pathname.match(
+    /(?:^|[\/_-])(20\d{2})[._-](0[1-9]|1[0-2])[._-](0[1-9]|[12]\d|3[01])(?:[\/_-]|$)/,
+  );
+  if (yearFirst) return validatedDate(yearFirst[1], yearFirst[2], yearFirst[3]);
+  const compactYearFirst = pathname.match(
+    /(?:^|[\/_-])(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:[\/_-]|$)/,
+  );
+  if (compactYearFirst) {
+    return validatedDate(compactYearFirst[1], compactYearFirst[2], compactYearFirst[3]);
+  }
+  const compactDayFirst = pathname.match(
+    /(?:^|[\/_-])(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])(20\d{2})(?:[\/_-]|$)/,
+  );
+  if (compactDayFirst) {
+    return validatedDate(compactDayFirst[3], compactDayFirst[2], compactDayFirst[1]);
+  }
+  return null;
+}
+
 export function normaliseDate(value: string | null | undefined) {
   if (!value) return null;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString().slice(0, 10);
+}
+
+function validatedDate(yearValue: string, monthValue: string, dayValue: string) {
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return candidate.toISOString().slice(0, 10);
 }
 
 export function chunkText(

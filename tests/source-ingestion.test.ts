@@ -6,6 +6,7 @@ import {
   chunkText,
   extractHtmlLinks,
   extractHtmlPublicationDate,
+  extractPublicationDateFromUrl,
   selectDocumentCandidate,
   selectEvidencePassages,
 } from "../src/lib/intelligence/ingestion/parser";
@@ -39,6 +40,29 @@ describe("R5.3 bounded source ingestion", () => {
       extractHtmlPublicationDate('<meta property="article:published_time" content="2026-03-05T08:30:00Z">'),
     ).toBe("2026-03-05");
     expect(extractHtmlPublicationDate("<h1>Annual report 2025</h1>")).toBeNull();
+  });
+
+  it("uses only complete, valid dates encoded in canonical source URLs", () => {
+    expect(
+      extractPublicationDateFromUrl(
+        "https://example.com/releases/2026.03.02/results.pdf",
+      ),
+    ).toBe("2026-03-02");
+    expect(
+      extractPublicationDateFromUrl(
+        "https://example.com/results/13022026/report.pdf",
+      ),
+    ).toBe("2026-02-13");
+    expect(
+      extractPublicationDateFromUrl(
+        "https://example.com/reports/2025/annual-report-2025.pdf",
+      ),
+    ).toBeNull();
+    expect(
+      extractPublicationDateFromUrl(
+        "https://example.com/releases/2026.02.31/report.pdf",
+      ),
+    ).toBeNull();
   });
 
   it("retains a bounded set of strategy-relevant passages", () => {
