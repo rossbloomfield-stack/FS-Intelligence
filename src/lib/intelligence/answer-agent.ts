@@ -10,7 +10,7 @@ import type { StructuredKnowledge } from "@/lib/intelligence/structured-answer";
 const findingSchema=z.object({
  title:z.string().describe("A short, decision-useful finding title."),
  analysis:z.string().describe("What the evidence shows and why it is material."),
- referenceIds:z.array(z.string()).max(4).describe("Only reference IDs present in the supplied evidence package."),
+ referenceIds:z.array(z.string()).max(6).describe("Only reference IDs present in the supplied evidence package."),
 });
 
 const synthesisSchema=z.object({
@@ -58,6 +58,7 @@ Rules:
 - Answer the user's question directly and lead with the conclusion.
 - Use only facts present in the supplied evidence and structured knowledge. Do not use background memory for factual claims.
 - Every material evidence finding must cite one or more supplied reference IDs. Never invent an ID, source, date, figure or organisation activity.
+- For complex analytical questions, use a representative breadth of independent references across the findings when they materially contribute. Do not repeatedly cite one document when corroborating evidence is available.
 - Separate what the evidence shows from strategic interpretation. Use cautious language for inference.
 - Explain why the pattern matters, the Irish-market implication where relevant, and what observable change would alter the conclusion.
 - Surface meaningful counter-evidence or limitations. Do not manufacture balance when none exists.

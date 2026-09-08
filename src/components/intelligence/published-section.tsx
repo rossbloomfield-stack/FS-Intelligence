@@ -6,6 +6,20 @@ import { SectionPage } from "./section-page";
 
 type View = "competitors" | "ai" | "regulation" | "customer" | "actions" | "sources" | "signals";
 
+type LibrarySource = {
+  id: string;
+  title: string | null;
+  publisher: string | null;
+  url: string | null;
+  publication_date: string | null;
+  source_type: string | null;
+  primary_source: boolean | null;
+  credibility_tier: number | null;
+  evidence_classification: string | null;
+  canonical_domain: string | null;
+  geography: string | null;
+};
+
 const copy: Record<View, { eyebrow: string; title: string; description: string }> = {
   competitors: { eyebrow: "COMPETITIVE LANDSCAPE", title: "Where the market is moving", description: "The current publicly stated focus of major financial-services firms in Ireland and the UK, with explicit Irish read-across." },
   ai: { eyebrow: "AI & TRANSFORMATION", title: "From pilots to production value", description: "Hard evidence, emerging signals and the operating-model choices shaping applied AI and modernisation." },
@@ -18,6 +32,24 @@ const copy: Record<View, { eyebrow: string; title: string; description: string }
 
 async function latestReport() {
   try { const supabase = await createClient(); const { data } = await supabase.from("reports").select("slug,title,executive_headline,overall_assessment,published_at").eq("is_published", true).order("published_at", { ascending: false }).limit(1).maybeSingle(); return data; } catch { return null; }
+}
+
+async function approvedSourceLibrary(): Promise<LibrarySource[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("sources")
+      .select("id,title,publisher,url,publication_date,source_type,primary_source,credibility_tier,evidence_classification,canonical_domain,geography")
+      .eq("registry_kind", "document")
+      .eq("registry_active", true)
+      .eq("approved_public", true)
+      .order("publication_date", { ascending: false, nullsFirst: false })
+      .limit(200);
+    if (error) throw error;
+    return (data ?? []) as LibrarySource[];
+  } catch {
+    return [];
+  }
 }
 
 function FindingCard({ item, index }: { item: MarketFinding; index: number }) {
@@ -80,8 +112,45 @@ function ScoreGauge({label,score}:{label:string;score:number}) { return <div cla
 
 function Metric({ value, label, icon }: { value: string; label: string; icon: React.ReactNode }) { return <div className="rounded-xl border border-[var(--line)] bg-white p-4"><div className="flex items-center justify-between"><strong className="text-2xl">{value}</strong><span className="text-[var(--orange)]">{icon}</span></div><p className="mt-1 text-xs text-[var(--muted)]">{label}</p></div>; }
 
+function EvidenceLibrary({ sources, fallback }: { sources: LibrarySource[]; fallback: MarketFinding[] }) {
+  if (!sources.length) {
+    return <div className="mt-6 grid gap-4 md:grid-cols-2">{fallback.map(item => <article className="rounded-xl border border-[var(--line)] p-5" key={item.sourceUrl}><p className="label">PRIMARY / OFFICIAL EVIDENCE</p><h2 className="mt-2 font-semibold">{item.sourceLabel}</h2><p className="mt-2 text-sm leading-6 text-[var(--muted)]">Supports: {item.title}</p><Link className="source-link" href={item.sourceUrl} target="_blank" rel="noreferrer">Open source<ArrowUpRight size={14}/></Link></article>)}</div>;
+  }
+  const publishers = new Set(sources.map(item => item.publisher).filter(Boolean));
+  const domains = new Set(sources.map(item => item.canonical_domain).filter(Boolean));
+  return <>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Metric value={String(sources.length)} label="verified evidence documents" icon={<ShieldCheck size={18}/>}/>
+      <Metric value={String(publishers.size)} label="publishers represented" icon={<Radar size={18}/>}/>
+      <Metric value={String(domains.size)} label="independent source domains" icon={<Radar size={18}/>}/>
+      <Metric value={String(sources.filter(item => item.primary_source).length)} label="primary-source documents" icon={<ShieldCheck size={18}/>}/>
+    </div>
+    <div className="mt-6 grid gap-4 md:grid-cols-2">{sources.map(item => <article className="rounded-xl border border-[var(--line)] p-5" key={item.id}>
+      <div className="flex flex-wrap items-center gap-2"><span className="label">{item.primary_source ? "PRIMARY / OFFICIAL EVIDENCE" : "INDEPENDENT EVIDENCE"}</span>{item.credibility_tier && <span className="signal-pill">Tier {item.credibility_tier}</span>}</div>
+      <h2 className="mt-2 font-semibold">{item.title?.trim() || "Untitled evidence source"}</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{[item.publisher, item.geography, formatEvidenceDate(item.publication_date)].filter(Boolean).join(" · ")}</p>
+      <p className="mt-2 text-xs text-[var(--muted)]">{humaniseSourceType(item.evidence_classification ?? item.source_type)}</p>
+      {item.url && <Link className="source-link" href={item.url} target="_blank" rel="noreferrer">Open source<ArrowUpRight size={14}/></Link>}
+    </article>)}</div>
+  </>;
+}
+
+function humaniseSourceType(value: string | null) {
+  if (!value) return "Verified market evidence";
+  return value.replaceAll("_", " ").replace(/\b\w/g, character => character.toUpperCase());
+}
+
+function formatEvidenceDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat("en-IE", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
+}
+
 export async function PublishedSection({ view }: { view: View }) {
-  const report = await latestReport();
+  const [report, sourceLibrary] = await Promise.all([
+    latestReport(),
+    view === "sources" ? approvedSourceLibrary() : Promise.resolve([]),
+  ]);
   const page = copy[view];
   const allFindings = [...findings.ai, ...findings.regulation, ...findings.customer];
   const sectionFindings = view === "signals" || view === "sources" ? allFindings : view === "competitors" ? [] : findings[view];
@@ -89,7 +158,7 @@ export async function PublishedSection({ view }: { view: View }) {
 
   return <SectionPage {...page}>
     <div className="report-context"><div><p className="label text-purple-200">LATEST PUBLISHED ASSESSMENT</p><p className="mt-2 max-w-4xl text-lg font-semibold text-white">{report?.executive_headline ?? reportMeta.headline}</p></div><div className="text-sm text-purple-100">{reportMeta.period}</div></div>
-    {view === "competitors" ? <Competitors/> : view === "regulation" ? <RegulationRadar/> : view === "sources" ? <div className="mt-6 grid gap-4 md:grid-cols-2">{uniqueSources.map(item => <article className="rounded-xl border border-[var(--line)] p-5" key={item.sourceUrl}><p className="label">PRIMARY / OFFICIAL EVIDENCE</p><h2 className="mt-2 font-semibold">{item.sourceLabel}</h2><p className="mt-2 text-sm leading-6 text-[var(--muted)]">Supports: {item.title}</p><Link className="source-link" href={item.sourceUrl} target="_blank" rel="noreferrer">Open source<ArrowUpRight size={14}/></Link></article>)}</div> : <div className="mt-6 space-y-4">{sectionFindings.map((item, index) => <FindingCard key={`${view}-${item.title}`} item={item} index={index}/>)}</div>}
+    {view === "competitors" ? <Competitors/> : view === "regulation" ? <RegulationRadar/> : view === "sources" ? <EvidenceLibrary sources={sourceLibrary} fallback={uniqueSources}/> : <div className="mt-6 space-y-4">{sectionFindings.map((item, index) => <FindingCard key={`${view}-${item.title}`} item={item} index={index}/>)}</div>}
     <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-5"><p className="mr-auto max-w-3xl text-sm text-[var(--muted)]">{report?.overall_assessment ?? reportMeta.assessment}</p>{report && <Link className="rounded-lg bg-[var(--purple)] px-4 py-2 text-sm font-semibold text-white" href={`/intelligence/reports/${report.slug}`}>Open full report</Link>}</div>
   </SectionPage>;
 }

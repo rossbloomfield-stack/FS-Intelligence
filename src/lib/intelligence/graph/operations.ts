@@ -292,7 +292,7 @@ export async function backfillKnowledgeGraph(limit: number) {
 export async function queueR4SourceBackfill(limit: number) {
   const db = createAdminClient();
   const { data, error } = await db.rpc("queue_r4_source_backfill", {
-    p_limit: Math.max(1, Math.min(limit, 50)),
+    p_limit: Math.max(1, Math.min(limit, 200)),
   });
   if (error) throw new Error(`Could not queue R4 source expansion: ${error.message}`);
   return { queued: data?.length ?? 0, runIds: (data ?? []).map((row: { id: string }) => row.id) };

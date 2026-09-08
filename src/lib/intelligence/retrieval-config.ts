@@ -18,7 +18,7 @@ export const defaultRetrievalConfig: RetrievalConfig = {
   lexicalCandidateCount: 40,
   maximumDecompositionQueries: 4,
   rerankCandidateCount: 80,
-  finalEvidenceCount: 14,
+  finalEvidenceCount: 18,
   maximumChunksPerDocument: 2,
   maximumDocumentsPerDomain: 4,
   recencyWeight: 0.12,

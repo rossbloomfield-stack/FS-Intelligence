@@ -101,6 +101,39 @@ describe("R5.3 bounded source ingestion", () => {
     expect(migration).toContain("'retry-fairness-v1'");
   });
 
+  it("runs a dedicated bounded corpus worker independently of the daily report window", () => {
+    const route = readFileSync("src/app/api/cron/corpus/route.ts", "utf8");
+    const vercel = readFileSync("vercel.json", "utf8");
+    expect(route).toContain("process.env.CRON_SECRET");
+    expect(route).toContain("backfillApprovedEmbeddings(100)");
+    expect(route).toContain("queueR4SourceBackfill(200)");
+    expect(route).toContain("startQueuedSourceIngestion(20)");
+    expect(vercel).toContain('"path": "/api/cron/corpus"');
+    expect(vercel).toContain('"schedule": "17 */2 * * *"');
+  });
+
+  it("keeps the expanded corpus queue verified, idempotent and service-role only", () => {
+    const migration = readFileSync(
+      "supabase/migrations/20260908224000_r4_corpus_throughput.sql",
+      "utf8",
+    );
+    expect(migration).toContain("target.readiness_grade='A'");
+    expect(migration).toContain("connector.endpoint_verified");
+    expect(migration).toContain("not connector.terms_review_required");
+    expect(migration).toContain("existing.status in ('queued','running','completed','partial','blocked')");
+    expect(migration).toContain("limit least(greatest(coalesce(p_limit,100),1),200)");
+    expect(migration).toContain("on conflict (execution_key) do nothing");
+    expect(migration).toContain("grant execute on function public.queue_r4_source_backfill(integer) to service_role");
+  });
+
+  it("renders the public evidence library from approved corpus documents", () => {
+    const section = readFileSync("src/components/intelligence/published-section.tsx", "utf8");
+    expect(section).toContain('eq("registry_kind", "document")');
+    expect(section).toContain('eq("approved_public", true)');
+    expect(section).toContain('label="verified evidence documents"');
+    expect(section).toContain("approvedSourceLibrary()");
+  });
+
   it("accepts only substantial material passages from bounded official web pages", () => {
     const migration = readFileSync(
       "supabase/migrations/20260908214500_r4_trusted_bounded_web_evidence.sql",
