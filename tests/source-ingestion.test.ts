@@ -89,6 +89,18 @@ describe("R5.3 bounded source ingestion", () => {
     );
   });
 
+  it("prevents exhausted or concentrated failures from starving the queue", () => {
+    const migration = readFileSync(
+      "supabase/migrations/20260908222000_r4_ingestion_retry_fairness.sql",
+      "utf8",
+    );
+    expect(migration).toContain("run.attempt < 3");
+    expect(migration).toContain("partition by coalesce");
+    expect(migration).toContain("parent.canonical_domain");
+    expect(migration).toContain("eligible.domain_rank");
+    expect(migration).toContain("'retry-fairness-v1'");
+  });
+
   it("accepts only substantial material passages from bounded official web pages", () => {
     const migration = readFileSync(
       "supabase/migrations/20260908214500_r4_trusted_bounded_web_evidence.sql",
