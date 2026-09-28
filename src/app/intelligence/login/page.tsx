@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import { ArrowRight, Check, LockKeyhole } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
@@ -27,29 +27,134 @@ const benefits = [
 
 export default function Login() {
   const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const [state, setState] = useState<LoginState>(null);
   const [pending, setPending] = useState(false);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const error = search.get("error") ?? hash.get("error_code") ?? hash.get("error");
+    const message = error === "not-approved"
+      ? "This email is not approved for this workspace."
+      : error
+        ? "That sign-in link is no longer valid. Request a new email and try again."
+        : null;
+
+    if (!message) return;
+
+    let active = true;
+    window.queueMicrotask(() => {
+      if (active) setState({ kind: "error", text: message });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function safeNextPath() {
+    const fallback = "/intelligence";
+    const requested = new URLSearchParams(window.location.search).get("next");
+
+    if (!requested) return fallback;
+
+    try {
+      const base = "https://market-intelligence.invalid";
+      const target = new URL(requested, base);
+      const isIntelligenceRoute =
+        target.pathname === fallback || target.pathname.startsWith(`${fallback}/`);
+
+      if (target.origin !== base || !isIntelligenceRoute || target.pathname === "/intelligence/login") {
+        return fallback;
+      }
+
+      return `${target.pathname}${target.search}${target.hash}`;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function requestSignIn() {
+    setPending(true);
+    setState(null);
+
+    try {
+      const supabase = createClient();
+      const next = safeNextPath();
+      const callback = new URL("/api/auth/callback", window.location.origin);
+      callback.searchParams.set("next", next);
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: {
+          emailRedirectTo: callback.toString(),
+          shouldCreateUser: false,
+        },
+      });
+
+      if (error) {
+        setState({
+          kind: "error",
+          text: "We couldn’t send sign-in instructions. Confirm you’re using an approved email and try again.",
+        });
+        return;
+      }
+
+      setCodeSent(true);
+      setToken("");
+      setState({
+        kind: "success",
+        text: "Check your email. Enter the six-digit code if shown, or use the secure sign-in link.",
+      });
+    } catch {
+      setState({ kind: "error", text: "Secure sign-in is temporarily unavailable. Please try again." });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await requestSignIn();
+  }
+
+  async function submitCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     setState(null);
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: `${location.origin}/api/auth/callback` },
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token,
+        type: "email",
       });
 
-      setState(error
-        ? { kind: "error", text: "We couldn’t send the secure link. Check your email and try again." }
-        : { kind: "success", text: "Check your email for your secure sign-in link." });
+      if (error) {
+        setState({
+          kind: "error",
+          text: "That code is invalid or has expired. Request a new email and try again.",
+        });
+        return;
+      }
+
+      setState({ kind: "success", text: "Sign-in confirmed. Opening Market Intelligence…" });
+      const callback = new URL("/api/auth/callback", window.location.origin);
+      callback.searchParams.set("next", safeNextPath());
+      window.location.assign(callback.toString());
     } catch {
-      setState({ kind: "error", text: "Secure sign-in is temporarily unavailable. Please try again." });
+      setState({ kind: "error", text: "We couldn’t verify that code. Please try again." });
     } finally {
       setPending(false);
     }
+  }
+
+  function changeEmail() {
+    setCodeSent(false);
+    setToken("");
+    setState(null);
   }
 
   return (
@@ -73,30 +178,62 @@ export default function Login() {
           </div>
 
           <div className="irishlife-login-card">
-            <h2>Log in</h2>
-            <p>Access is limited to approved users.</p>
+            <h2>{codeSent ? "Enter your security code" : "Log in"}</h2>
+            <p>{codeSent ? `We sent sign-in instructions to ${email.trim()}.` : "Access is limited to approved users."}</p>
 
-            <form onSubmit={submit}>
-              <label htmlFor="work-email">Work email <span aria-hidden="true">*</span></label>
-              <div className="irishlife-login-field">
-                <input
-                  id="work-email"
-                  required
-                  autoComplete="email"
-                  inputMode="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  aria-describedby="login-email-hint"
-                />
-              </div>
-              <p id="login-email-hint" className="irishlife-login-hint">We’ll email you a secure, password-free sign-in link.</p>
+            {!codeSent ? (
+              <form onSubmit={submitEmail}>
+                <label htmlFor="work-email">Work email <span aria-hidden="true">*</span></label>
+                <div className="irishlife-login-field">
+                  <input
+                    id="work-email"
+                    required
+                    autoComplete="email"
+                    inputMode="email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    aria-describedby="login-email-hint"
+                  />
+                </div>
+                <p id="login-email-hint" className="irishlife-login-hint">We’ll email secure, password-free sign-in instructions.</p>
 
-              <button type="submit" disabled={pending}>
-                <span>{pending ? "Sending link…" : "Continue"}</span>
-                <span className="irishlife-login-button-icon" aria-hidden="true"><ArrowRight size={20} /></span>
-              </button>
-            </form>
+                <button type="submit" disabled={pending}>
+                  <span>{pending ? "Sending…" : "Continue"}</span>
+                  <span className="irishlife-login-button-icon" aria-hidden="true"><ArrowRight size={20} /></span>
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={submitCode}>
+                <label htmlFor="security-code">Six-digit security code <span aria-hidden="true">*</span></label>
+                <div className="irishlife-login-field irishlife-login-code-field">
+                  <input
+                    id="security-code"
+                    required
+                    autoFocus
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    type="text"
+                    value={token}
+                    onChange={(event) => setToken(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    aria-describedby="login-code-hint"
+                  />
+                </div>
+                <p id="login-code-hint" className="irishlife-login-hint">If your email only contains a secure sign-in link, open that link instead.</p>
+
+                <button type="submit" disabled={pending || token.length !== 6}>
+                  <span>{pending ? "Checking…" : "Continue securely"}</span>
+                  <span className="irishlife-login-button-icon" aria-hidden="true"><ArrowRight size={20} /></span>
+                </button>
+
+                <div className="irishlife-login-alternatives">
+                  <button type="button" onClick={changeEmail} disabled={pending}>Use a different email</button>
+                  <button type="button" onClick={requestSignIn} disabled={pending}>Send a new email</button>
+                </div>
+              </form>
+            )}
 
             {state && (
               <p className={`irishlife-login-status irishlife-login-status-${state.kind}`} role={state.kind === "error" ? "alert" : "status"}>
