@@ -1,4 +1,8 @@
-const baselineApprovedEmails = ["masses_bonds_0l@icloud.com", "rossbloomfield@icloud.com"];
+const baselineApprovedEmails = [
+  "masses_bonds_0l@icloud.com",
+  "rossbloomfield@icloud.com",
+  "ross.bloomfield@irishlife.ie",
+];
 
 export function isApprovedEmail(email?: string | null) {
   if (!email) return false;

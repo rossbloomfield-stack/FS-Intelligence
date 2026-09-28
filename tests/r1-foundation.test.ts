@@ -7,6 +7,7 @@ describe("R1 controlled access",()=>{
  afterEach(()=>{if(original===undefined)delete process.env.APPROVED_USER_EMAILS;else process.env.APPROVED_USER_EMAILS=original;});
  it("fails closed when no allowlist is configured",()=>{delete process.env.APPROVED_USER_EMAILS;delete process.env.ADMIN_EMAILS;expect(isApprovedEmail("person@example.com")).toBe(false);});
  it("allows the approved Ross Bloomfield account",()=>{delete process.env.APPROVED_USER_EMAILS;expect(isApprovedEmail("rossbloomfield@icloud.com")).toBe(true);});
+ it("allows the approved Irish Life account case-insensitively",()=>{delete process.env.APPROVED_USER_EMAILS;expect(isApprovedEmail("Ross.Bloomfield@irishlife.ie")).toBe(true);});
  it("matches approved addresses case-insensitively",()=>{process.env.APPROVED_USER_EMAILS="masses_bonds_0l@icloud.com";expect(isApprovedEmail("MASSES_BONDS_0L@ICLOUD.COM")).toBe(true);});
 });
 describe("R1 evidence gate",()=>{
