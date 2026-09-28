@@ -40,12 +40,20 @@ export async function retrieveIntelligenceEvidence({
     plan,
     config.maximumDecompositionQueries,
   );
+  const requestedOrganisationIds = plan.organisations.map((organisation) => organisation.id);
   const lexicalResults = await Promise.all(
     subqueries.map(async (subquery): Promise<RetrievalCandidateList> => {
-      const result = await db.rpc("search_approved_source_chunks_lexical", {
-        search_query: subquery.query,
-        result_limit: config.lexicalCandidateCount,
-      });
+      const result = subquery.facet && requestedOrganisationIds.length
+        ? await db.rpc("search_approved_company_strategy_chunks", {
+            search_query: subquery.query,
+            requested_organisation_ids: requestedOrganisationIds,
+            requested_strategy_facet: subquery.facet,
+            result_limit: config.lexicalCandidateCount,
+          })
+        : await db.rpc("search_approved_source_chunks_lexical", {
+            search_query: subquery.query,
+            result_limit: config.lexicalCandidateCount,
+          });
       if (result.error) {
         throw new Error(`Lexical retrieval failed: ${result.error.message}`);
       }

@@ -3750,6 +3750,41 @@ export type Database = {
           review_status: string
         }[]
       }
+      search_approved_company_strategy_chunks: {
+        Args: {
+          requested_organisation_ids: string[]
+          requested_strategy_facet?: string | null
+          result_limit?: number
+          search_query: string
+        }
+        Returns: {
+          canonical_domain: string | null
+          categorisation: string | null
+          chunk_content: string
+          chunk_id: number
+          content_hash: string
+          credibility_tier: number
+          evidence_classification: string | null
+          evidence_source_id: string
+          geography: string | null
+          organisation_ids: string[]
+          organisation_names: string[]
+          page_number: number | null
+          primary_source: boolean
+          publication_date: string | null
+          publisher: string
+          relevance: number
+          section_label: string | null
+          signal_type: string | null
+          source_class: string | null
+          source_item_id: string
+          source_type: string
+          source_weight: number
+          strategy_facet: string
+          title: string
+          url: string
+        }[]
+      }
       search_approved_source_chunks: {
         Args: { result_limit?: number; search_query: string }
         Returns: {

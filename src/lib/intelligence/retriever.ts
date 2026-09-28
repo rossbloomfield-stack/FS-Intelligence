@@ -9,6 +9,8 @@ import {
 import { assessFreshness, type FreshnessAssessment } from "@/lib/intelligence/freshness";
 import {
   buildRetrievalSearchQuery,
+  companyStrategyFacets,
+  type CompanyStrategyFacet,
   type RetrievalSubquery,
 } from "@/lib/intelligence/query-decomposition";
 import {
@@ -61,6 +63,9 @@ export type ApprovedSourceChunkRow = {
   page_number: number | null;
   content_hash?: string | null;
   organisation_names?: string[] | null;
+  organisation_ids?: string[] | null;
+  signal_type?: string | null;
+  strategy_facet?: CompanyStrategyFacet | null;
   relevance?: number | null;
 };
 
@@ -105,6 +110,8 @@ export type RetrievalDiagnosticCandidate = {
   lexicalRank: number | null;
   semanticRank: number | null;
   queryIds: string[];
+  strategyFacet: CompanyStrategyFacet | null;
+  signalType: string | null;
 };
 export type RetrievalResult = {
   references: EvidenceReference[];
@@ -361,6 +368,8 @@ export function retrieveHybridFinancialIntelligence({
       lexicalRank: candidate.lexicalRank,
       semanticRank: candidate.semanticRank,
       queryIds: [...candidate.queryIds],
+      strategyFacet: candidate.row.strategy_facet ?? null,
+      signalType: candidate.row.signal_type ?? null,
     })),
   };
 }
@@ -380,6 +389,15 @@ export function fuseCandidates(
       if (existing) {
         existing.rrfScore += reciprocalRank;
         existing.queryIds.add(list.subquery.id);
+        if (!existing.row.strategy_facet && row.strategy_facet) {
+          existing.row.strategy_facet = row.strategy_facet;
+        }
+        if (!existing.row.signal_type && row.signal_type) {
+          existing.row.signal_type = row.signal_type;
+        }
+        if (!existing.row.organisation_ids?.length && row.organisation_ids?.length) {
+          existing.row.organisation_ids = row.organisation_ids;
+        }
         if (list.channel === "lexical") {
           existing.lexicalRelevance = Math.max(existing.lexicalRelevance, Number(row.relevance ?? 0));
           existing.lexicalRank = Math.min(existing.lexicalRank ?? rank, rank);
@@ -437,12 +455,29 @@ export function selectDiverseEvidence(
   const documentCounts = new Map<string, number>();
   const domainDocuments = new Map<string, Set<string>>();
 
+  if (
+    plan.intent === "company_strategy" &&
+    plan.timeframe.label === "current" &&
+    plan.organisations.length > 0
+  ) {
+    for (const facet of companyStrategyFacets) {
+      if (selected.length >= config.finalEvidenceCount) break;
+      const candidate = candidates.find(
+        (item) =>
+          !selected.includes(item) &&
+          canAdd(item) &&
+          item.row.strategy_facet === facet &&
+          matchesRequestedOrganisation(item.row, plan),
+      );
+      if (candidate) add(candidate);
+    }
+  }
   for (const organisation of plan.organisations) {
     const candidate = candidates.find(
       (item) =>
         !selected.includes(item) &&
         canAdd(item) &&
-        candidateText(item.row).includes(organisation.name.toLocaleLowerCase("en-IE")),
+        matchesOrganisation(item.row, organisation.id, organisation.name),
     );
     if (candidate) add(candidate);
   }
@@ -499,20 +534,38 @@ export function assessCoverage(
     const age = ageDays(item.row.publication_date, now);
     return age !== null && age <= (plan.timeframe.currentInformationRequired ? 45 : 730);
   });
+  const strategyFacets = new Set(
+    selected.flatMap((item) => item.row.strategy_facet ? [item.row.strategy_facet] : []),
+  );
+  const currentCompanyStrategy =
+    plan.intent === "company_strategy" &&
+    plan.timeframe.label === "current" &&
+    plan.organisations.length > 0;
+  const hasStrategyCore =
+    strategyFacets.has("declared_strategy") &&
+    strategyFacets.has("recent_execution");
+  const hasCompleteStrategyMix = companyStrategyFacets.every((facet) =>
+    strategyFacets.has(facet),
+  );
+  if (currentCompanyStrategy && !hasStrategyCore) return "limited";
   if (
     selected.length >= 8 &&
     documents.size >= 5 &&
     domains.size >= 3 &&
     primary.size >= 2 &&
     organisationCoverage === 1 &&
-    recentEnough
+    recentEnough &&
+    (!currentCompanyStrategy || hasCompleteStrategyMix)
   ) return "strong";
   if (
     selected.length >= 4 &&
     documents.size >= 3 &&
     domains.size >= 2 &&
     primary.size >= 1 &&
-    organisationCoverage >= 0.5
+    organisationCoverage >= 0.5 &&
+    (!currentCompanyStrategy ||
+      strategyFacets.has("independent_context") ||
+      strategyFacets.has("soft_signal"))
   ) return "adequate";
   return "limited";
 }
@@ -599,6 +652,22 @@ function toReferences(
         relevance: candidate.score,
       }));
       const strongest = passages[0];
+      const strategyFacets = [
+        ...new Set(
+          candidates
+            .map((candidate) => candidate.row.strategy_facet)
+            .filter((facet): facet is CompanyStrategyFacet => Boolean(facet)),
+        ),
+      ];
+      const signalTypes = [
+        ...new Set(
+          candidates
+            .map((candidate) => candidate.row.signal_type)
+            .filter((signalType): signalType is "hard" | "soft" =>
+              signalType === "hard" || signalType === "soft",
+            ),
+        ),
+      ];
       const location = [
         strongest?.sectionLabel,
         strongest?.pageNumber ? `page ${strongest.pageNumber}` : null,
@@ -617,6 +686,8 @@ function toReferences(
         supportStrength: "supporting" as const,
         rank: index + 1,
         passages,
+        strategyFacets: strategyFacets.length ? strategyFacets : undefined,
+        signalTypes: signalTypes.length ? signalTypes : undefined,
       };
     });
 }
@@ -644,6 +715,27 @@ function buildGaps(
   }
   if (coverage === "limited") {
     gaps.push("The retrieved evidence base is limited in depth or source diversity.");
+  }
+  if (
+    plan.intent === "company_strategy" &&
+    plan.timeframe.label === "current" &&
+    plan.organisations.length > 0
+  ) {
+    const availableFacets = new Set(
+      references.flatMap((reference) => reference.strategyFacets ?? []),
+    );
+    if (!availableFacets.has("declared_strategy")) {
+      gaps.push("No approved annual-report or declared-strategy passage matched this company.");
+    }
+    if (!availableFacets.has("recent_execution")) {
+      gaps.push("No approved recent-execution evidence matched this company.");
+    }
+    if (!availableFacets.has("independent_context")) {
+      gaps.push("No approved independent news or market context matched this company.");
+    }
+    if (!availableFacets.has("soft_signal")) {
+      gaps.push("No approved hiring or other directional soft-signal evidence matched this company.");
+    }
   }
   if (freshnessAssessment.requiresFreshResearch) gaps.push(freshnessAssessment.reason);
   return [...new Set(gaps)];
@@ -707,8 +799,34 @@ function candidateText(row: ApprovedSourceChunkRow) {
   return [
     row.title, row.publisher, row.chunk_content, row.section_label, row.source_type,
     row.evidence_classification, row.categorisation, row.geography,
+    row.signal_type, row.strategy_facet,
     ...(row.organisation_names ?? []),
   ].filter(Boolean).join(" ").toLocaleLowerCase("en-IE");
+}
+
+function matchesRequestedOrganisation(
+  row: ApprovedSourceChunkRow,
+  plan: IntelligenceQueryPlan,
+) {
+  return plan.organisations.some((organisation) =>
+    matchesOrganisation(row, organisation.id, organisation.name),
+  );
+}
+
+function matchesOrganisation(
+  row: ApprovedSourceChunkRow,
+  organisationId: string,
+  organisationName: string,
+) {
+  return Boolean(
+    row.organisation_ids?.includes(organisationId) ||
+      row.organisation_names?.some(
+        (name) =>
+          name.toLocaleLowerCase("en-IE") ===
+          organisationName.toLocaleLowerCase("en-IE"),
+      ) ||
+      candidateText(row).includes(organisationName.toLocaleLowerCase("en-IE")),
+  );
 }
 
 function tokenise(value: string) {

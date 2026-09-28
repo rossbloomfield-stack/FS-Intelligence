@@ -4,7 +4,17 @@ export type RetrievalSubquery = {
   id: string;
   query: string;
   purpose: string;
+  facet?: CompanyStrategyFacet;
 };
+
+export const companyStrategyFacets = [
+  "declared_strategy",
+  "recent_execution",
+  "independent_context",
+  "soft_signal",
+] as const;
+
+export type CompanyStrategyFacet = (typeof companyStrategyFacets)[number];
 
 const expansionTerms: Partial<
   Record<IntelligenceQueryPlan["intent"], string[]>
@@ -144,6 +154,13 @@ export function decomposeIntelligenceQuery(
   plan: IntelligenceQueryPlan,
   maximumQueries = 4,
 ): RetrievalSubquery[] {
+  if (
+    plan.intent === "company_strategy" &&
+    plan.timeframe.label === "current" &&
+    plan.organisations.length > 0
+  ) {
+    return companyStrategyQueries(question, plan).slice(0, maximumQueries);
+  }
   const queries: RetrievalSubquery[] = [
     {
       id: "direct",
@@ -192,6 +209,81 @@ export function decomposeIntelligenceQuery(
     if (queries.length >= maximumQueries) break;
   }
   return deduplicateQueries(queries).slice(0, maximumQueries);
+}
+
+function companyStrategyQueries(
+  question: string,
+  plan: IntelligenceQueryPlan,
+): RetrievalSubquery[] {
+  const entityNames = plan.organisations.flatMap((organisation) => [
+    organisation.name,
+    organisation.slug.replaceAll("-", " "),
+  ]);
+  const common = [question, ...entityNames, ...plan.markets, ...plan.jurisdictions];
+  return [
+    {
+      id: "strategy-declared",
+      query: uniqueTerms([
+        ...common,
+        "declared strategy",
+        "annual report",
+        "interim results",
+        "strategic priorities",
+        "growth priorities",
+        "capital allocation",
+        "operating model",
+        "key risks",
+      ]).join(" "),
+      purpose: "Declared strategy and first-party strategic priorities",
+      facet: "declared_strategy",
+    },
+    {
+      id: "strategy-execution",
+      query: uniqueTerms([
+        ...common,
+        "recent execution",
+        "trading update",
+        "investment",
+        "launch",
+        "partnership",
+        "customer",
+        "product",
+        "technology",
+        "delivery progress",
+      ]).join(" "),
+      purpose: "Recent evidence of strategy execution",
+      facet: "recent_execution",
+    },
+    {
+      id: "strategy-independent",
+      query: uniqueTerms([
+        ...common,
+        "independent analysis",
+        "financial news",
+        "market commentary",
+        "competitive context",
+        "strategy assessment",
+      ]).join(" "),
+      purpose: "Independent reporting and market context",
+      facet: "independent_context",
+    },
+    {
+      id: "strategy-soft-signals",
+      query: uniqueTerms([
+        ...common,
+        "hiring",
+        "careers",
+        "vacancies",
+        "appointments",
+        "leadership",
+        "capability building",
+        "website change",
+        "app update",
+      ]).join(" "),
+      purpose: "Directional soft signals such as hiring and proposition changes",
+      facet: "soft_signal",
+    },
+  ];
 }
 
 function uniqueTerms(values: string[]) {

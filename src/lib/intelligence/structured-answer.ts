@@ -6,6 +6,27 @@ import type { GraphRelationshipContext } from "@/schemas/knowledge-graph";
 export type CompanyIntelligenceCard={id:string;slug:string;name:string;sector:string;jurisdiction:string|null;strategySummary:string|null;digitalAssessment:string|null;aiAssessment:string|null;strategicTheme:string|null;financialHighlights:string[];evidenceReferenceIds:string[]};
 export type ProductIntelligenceCard={id:string;provider:string;name:string;category:string;features:string[];journey:string|null;pricing:string|null;sourceReferenceId:string|null;thumbnailUrl:string|null};
 export type TimelineItem={id:string;date:string|null;label:string;summary:string;organisationNames:string[];sourceId:string|null;referenceId:string|null};
+export type CompanyStrategyProfile = {
+ id:string;
+ organisation_id:string;
+ organisation_name?:string;
+ strategy_summary:string;
+ strategic_priorities:string[];
+ growth_priorities:string[];
+ cost_priorities:string[];
+ distribution_strategy:string[];
+ digital_strategy:string[];
+ ai_strategy:string[];
+ customer_strategy:string[];
+ product_strategy:string[];
+ acquisition_strategy:string[];
+ technology_priorities:string[];
+ key_risks:string[];
+ effective_at:string;
+ confidence:"high"|"medium"|"low"|"insufficient";
+ sourceReferenceIds:string[];
+ sourceClaims:Array<{referenceId:string|null;claimSupported:string;supportStrength:string}>;
+};
 export type StructuredAnswer=
  | {kind:"company_comparison";title:string;companies:CompanyIntelligenceCard[];limitations:string[]}
  | {kind:"company_cards";title:string;companies:CompanyIntelligenceCard[];limitations:string[]}
@@ -13,7 +34,7 @@ export type StructuredAnswer=
  | {kind:"timeline";title:string;events:TimelineItem[];limitations:string[]};
 
 export type StructuredKnowledge={
- strategyProfiles:Array<{id:string;organisation_id:string;organisation_name?:string;strategy_summary:string;effective_at:string;confidence:"high"|"medium"|"low"|"insufficient"}>;
+ strategyProfiles:CompanyStrategyProfile[];
  financialMetrics:Array<{id:string;organisation_id:string;organisation_name?:string;metric:string;value:number;unit:string;period_end:string;source_id:string}>;
  digitalCapabilities:Array<{id:string;organisation_id:string;organisation_name?:string;capability:string;status:string;maturity:number|null;assessment:string|null;source_id:string}>;
  digitalBenchmarks:Array<{id:string;organisation_id:string|null;organisation_name?:string;category:string;assessment:string|null;maturity:number|null}>;

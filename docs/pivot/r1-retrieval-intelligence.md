@@ -87,7 +87,7 @@ User Question
 → Cited Answer + Private Diagnostics
 ```
 
-Conversation context is preserved by including the previous two user questions in entity resolution and retrieval. The current user question still controls answer intent and timeframe so an older turn cannot silently override a new request.
+Conversation context is included in entity resolution and retrieval only for a likely follow-up (for example, “Which is stronger in wealth?”). A new substantive question is retrieved on its own, so an earlier topic cannot contaminate entity or lexical matching. The current user question always controls answer intent and timeframe.
 
 ## Significant files
 

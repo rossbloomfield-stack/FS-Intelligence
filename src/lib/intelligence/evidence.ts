@@ -1,11 +1,12 @@
 import type { UIMessage } from "ai";
 import type { StructuredAnswer } from "@/lib/intelligence/structured-answer";
+import type { CompanyStrategyFacet } from "@/lib/intelligence/query-decomposition";
 
 export type EvidenceConfidence="high"|"medium"|"low"|"insufficient";
 export type EvidenceCoverage="strong"|"adequate"|"limited"|"insufficient";
 export type EvidenceSupport="supporting"|"counter"|"contextual";
 export type EvidencePassage={id:string;chunkId?:number|null;content:string;sectionLabel:string|null;pageNumber:number|null;relevance:number};
-export type EvidenceReference={id:string;sourceId:string;title:string;publisher:string;url:string;publicationDate:string|null;sourceType:string;primary:boolean;classification:string|null;claimSupported:string;supportStrength:EvidenceSupport;rank:number;passages?:EvidencePassage[]};
+export type EvidenceReference={id:string;sourceId:string;title:string;publisher:string;url:string;publicationDate:string|null;sourceType:string;primary:boolean;classification:string|null;claimSupported:string;supportStrength:EvidenceSupport;rank:number;passages?:EvidencePassage[];strategyFacets?:CompanyStrategyFacet[];signalTypes?:Array<"hard"|"soft">};
 export type EvidencePackage={confidence:EvidenceConfidence;coverage:EvidenceCoverage;freshness:"persistent_knowledge"|"persistent_plus_fresh"|"fresh_research";checkedAt:string;references:EvidenceReference[];primaryCount:number;passageCount:number;uniqueDocumentCount:number;uniqueDomainCount:number};
 export type IntelligenceFinding={title:string;analysis:string;referenceIds:string[]};
 export type IntelligenceAnalysis={

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isApprovedEmail } from "@/lib/auth/access";
 import { fallbackAnalysis } from "@/lib/intelligence/analysis";
 import { synthesiseIntelligenceAnswer } from "@/lib/intelligence/answer-agent";
+import { buildContextualRetrievalQuestion } from "@/lib/intelligence/conversation-context";
 import { type IntelligenceAnalysis,type IntelligenceUIMessage } from "@/lib/intelligence/evidence";
 import { attachAliases,resolveOrganisations } from "@/lib/intelligence/entity-resolver";
 import { planIntelligenceQuery } from "@/lib/intelligence/query-planner";
@@ -57,7 +58,6 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  if(!question||question.length>4000)return Response.json({error:"A valid question is required"},{status:400});
  const questions=userQuestions(body.messages);
  const priorQuestions=questions.slice(0,-1);
- const contextualQuestion=[...priorQuestions.slice(-2),question].join(" ");
  const [organisationResult,aliasResult]=await Promise.all([
   supabase.from("organisations").select("id,slug,name,sector,jurisdiction").eq("active",true),
   supabase.from("organisation_aliases").select("organisation_id,alias"),
@@ -66,13 +66,15 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  assertSupabaseSuccess(aliasResult,"organisation_aliases.select");
  const organisationRows=organisationResult.data;const aliasRows=aliasResult.data;
  const catalogue=attachAliases(organisationRows??[],aliasRows??[]);
- const organisations=resolveOrganisations(contextualQuestion,catalogue);
+ const explicitOrganisations=resolveOrganisations(question,catalogue);
+ const contextualQuestion=buildContextualRetrievalQuestion({question,priorQuestions,hasExplicitEntity:explicitOrganisations.length>0});
+ const organisations=explicitOrganisations.length?explicitOrganisations:resolveOrganisations(contextualQuestion,catalogue);
  const plan=planIntelligenceQuery(question,organisations);
  const domainAvailability=await loadDomainAvailability(supabase,plan.evidenceNeeds);
  const retrieval=await retrieveIntelligenceEvidence({db:supabase,question:contextualQuestion,plan,domainAvailability});
  const {references,evidence,gaps}=retrieval;
  const marketSignals=await retrieveIntelligenceSignals({db:supabase,question:contextualQuestion,plan,references});
- const graph=await retrieveKnowledgeGraph({db:supabase,organisationIds:plan.organisations.map(item=>item.id),references});
+ const graph=await retrieveKnowledgeGraph({db:supabase,organisationIds:plan.organisations.map(item=>item.id),references,onError:error=>logRouteError(error,requestId,"graph_retrieval")});
  const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references,marketSignals);
  structuredKnowledge.graphRelationships=graph.relationships;
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
@@ -93,8 +95,8 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
   writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"analysing",label:references.length?`Analysing ${references.length} approved sources across ${evidence.passageCount||references.length} evidence passages…`:"Assessing evidence coverage…"}});
   generationStartedAt=Date.now();
   let analysis:IntelligenceAnalysis;
-  try{analysis=await synthesiseIntelligenceAnswer({question,conversationContext:priorQuestions,plan,evidence,knowledge:structuredKnowledge})}
-  catch(error){logRouteError(error,requestId,"synthesis");analysis=fallbackAnalysis(evidence)}
+  try{analysis=await synthesiseIntelligenceAnswer({question,conversationContext:priorQuestions,plan,evidence,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps})}
+  catch(error){logRouteError(error,requestId,"synthesis");analysis=fallbackAnalysis(evidence,{question,plan,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps})}
   completedAnalysis=analysis;
   writer.write({type:"data-analysis",id:"answer-analysis",data:analysis});
   writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"complete",label:"Analysis complete"}});
@@ -130,7 +132,7 @@ async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof create
  if(organisationIds.length)productQuery=productQuery.in("organisation_id",organisationIds);
  else if(plan.products.length)productQuery=productQuery.in("category",plan.products);
  const [strategies,metrics,capabilities,products,digital,ai,updates,eventLinks]=await Promise.all([
-  organisationIds.length||marketWide?scoped(supabase.from("company_strategy_profiles").select("id,organisation_id,strategy_summary,effective_at,confidence").eq("approved",true).order("effective_at",{ascending:false}).limit(30)):Promise.resolve(emptyResult),
+  organisationIds.length||marketWide?scoped(supabase.from("company_strategy_profiles").select("id,organisation_id,strategy_summary,strategic_priorities,growth_priorities,cost_priorities,distribution_strategy,digital_strategy,ai_strategy,customer_strategy,product_strategy,acquisition_strategy,technology_priorities,key_risks,effective_at,confidence").eq("approved",true).order("effective_at",{ascending:false}).limit(30)):Promise.resolve(emptyResult),
   organisationIds.length||marketWide?scoped(supabase.from("company_financial_metrics").select("id,organisation_id,metric,value,unit,period_end,source_id").eq("approved",true).order("period_end",{ascending:false}).limit(50)):Promise.resolve(emptyResult),
   organisationIds.length||marketWide?scoped(supabase.from("digital_capabilities").select("id,organisation_id,capability,status,maturity,assessment,source_id").eq("approved",true).order("last_verified_at",{ascending:false}).limit(50)):Promise.resolve(emptyResult),
   plan.intent==="product_comparison"||organisationIds.length?productQuery:Promise.resolve(emptyResult),
@@ -140,6 +142,10 @@ async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof create
   organisationIds.length?supabase.from("event_organisations").select("organisation_id,candidate_events(id,title,event_date,announcement_date,source_publication_date,factual_summary)").in("organisation_id",organisationIds).limit(50):Promise.resolve(emptyResult),
  ]);
  assertSupabaseSuccess(strategies,"company_strategy_profiles.select");assertSupabaseSuccess(metrics,"company_financial_metrics.select");assertSupabaseSuccess(capabilities,"digital_capabilities.select");assertSupabaseSuccess(products,"products.select");assertSupabaseSuccess(digital,"digital_benchmarks.select");assertSupabaseSuccess(ai,"ai_initiatives.select");assertSupabaseSuccess(updates,"competitor_updates.select");assertSupabaseSuccess(eventLinks,"event_organisations.select");
+ const strategyProfileIds=(strategies.data??[]).map(item=>item.id);
+ const strategySourcesResult=strategyProfileIds.length?await supabase.from("company_strategy_profile_sources").select("profile_id,source_id,claim_supported,support_strength").in("profile_id",strategyProfileIds):emptyResult;
+ assertSupabaseSuccess(strategySourcesResult,"company_strategy_profile_sources.select");
+ const strategySources=strategySourcesResult.data??[];
  const knowledgeOrganisationIds=[...new Set([...organisationIds,...(strategies.data??[]).map(item=>item.organisation_id),...(metrics.data??[]).map(item=>item.organisation_id),...(capabilities.data??[]).map(item=>item.organisation_id),...(digital.data??[]).flatMap(item=>item.organisation_id?[item.organisation_id]:[]),...(ai.data??[]).map(item=>item.organisation_id),...(updates.data??[]).map(item=>item.organisation_id),...(products.data??[]).map(item=>item.organisation_id)])];
  const organisationNames=new Map<string,string>();
  const namesResult=knowledgeOrganisationIds.length?await supabase.from("organisations").select("id,name").in("id",knowledgeOrganisationIds):emptyResult;
@@ -160,7 +166,9 @@ async function loadStructuredKnowledge(supabase:Awaited<ReturnType<typeof create
  }
  const timelineEvents=[...timelineById.values()].sort((a,b)=>(b.date??"").localeCompare(a.date??""));
  const referenceBySource=new Map(references.map(reference=>[reference.sourceId,reference.id]));
+ const strategySourcesByProfile=new Map<string,typeof strategySources>();
+ for(const item of strategySources){const values=strategySourcesByProfile.get(item.profile_id)??[];values.push(item);strategySourcesByProfile.set(item.profile_id,values)}
  const productCards=(products.data??[]).map(product=>({id:product.id,provider:organisationNames.get(product.organisation_id)??"Organisation",name:product.name,category:product.category,features:product.key_features??[],journey:product.online_journey,pricing:product.pricing??product.fees,sourceReferenceId:referenceBySource.get(product.source_id)??null,thumbnailUrl:null}));
  const withName=<T extends {organisation_id:string}>(item:T)=>({...item,organisation_name:organisationNames.get(item.organisation_id)??"Organisation"});
- return {strategyProfiles:(strategies.data??[]).map(withName),financialMetrics:(metrics.data??[]).map(item=>withName({...item,value:Number(item.value)})),digitalCapabilities:(capabilities.data??[]).map(withName),digitalBenchmarks:(digital.data??[]).map(item=>({...item,organisation_name:item.organisation_id?organisationNames.get(item.organisation_id)??"Organisation":undefined})),aiInitiatives:(ai.data??[]).map(withName),competitorUpdates:(updates.data??[]).map(withName),timelineEvents,products:productCards,marketSignals};
+ return {strategyProfiles:(strategies.data??[]).map(item=>{const profileSources=strategySourcesByProfile.get(item.id)??[];return withName({...item,sourceReferenceIds:[...new Set(profileSources.flatMap(source=>{const referenceId=referenceBySource.get(source.source_id);return referenceId?[referenceId]:[]}))],sourceClaims:profileSources.map(source=>({referenceId:referenceBySource.get(source.source_id)??null,claimSupported:source.claim_supported,supportStrength:source.support_strength}))})}),financialMetrics:(metrics.data??[]).map(item=>withName({...item,value:Number(item.value)})),digitalCapabilities:(capabilities.data??[]).map(withName),digitalBenchmarks:(digital.data??[]).map(item=>({...item,organisation_name:item.organisation_id?organisationNames.get(item.organisation_id)??"Organisation":undefined})),aiInitiatives:(ai.data??[]).map(withName),competitorUpdates:(updates.data??[]).map(withName),timelineEvents,products:productCards,marketSignals};
 }
