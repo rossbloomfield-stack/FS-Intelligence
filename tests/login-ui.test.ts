@@ -16,8 +16,19 @@ describe("Irish Life login experience", () => {
 
   it("preserves passwordless approved-user authentication", () => {
     expect(page).toContain("signInWithOtp");
+    expect(page).toContain("shouldCreateUser: false");
+    expect(page).toContain("verifyOtp");
+    expect(page).toContain('type: "email"');
     expect(page).toContain("Access is limited to approved users");
-    expect(page).toContain("password-free sign-in link");
+    expect(page).toContain("password-free sign-in instructions");
+    expect(page).toContain('autoComplete="one-time-code"');
+    expect(page).toContain("six-digit code if shown");
     expect(page).not.toContain('type="password"');
+  });
+
+  it("retains a safe intelligence return path through the auth callback", () => {
+    expect(page).toContain('new URL("/api/auth/callback", window.location.origin)');
+    expect(page).toContain('target.origin !== base');
+    expect(page).toContain('target.pathname.startsWith(`${fallback}/`)');
   });
 });
