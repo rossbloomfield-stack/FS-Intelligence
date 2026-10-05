@@ -13,8 +13,13 @@ import { completeRetrievalDiagnostic,persistRetrievalDiagnostic } from "@/lib/in
 import { buildStructuredAnswer,type StructuredKnowledge } from "@/lib/intelligence/structured-answer";
 import { retrieveIntelligenceSignals } from "@/lib/intelligence/signals/retriever";
 import { retrieveKnowledgeGraph } from "@/lib/intelligence/graph/retriever";
+import { getSemrushConnectionState, marketResearchFlags } from "@/config/market-research";
+import { routeResearchIntent } from "@/lib/market-research/semrush-skill";
+import { createPageDraft, type PageDraft } from "@/lib/market-research/page-draft";
+import { researchWithSemrush } from "@/lib/market-research/semrush-research";
+import { makeEvidencePackage } from "@/lib/intelligence/evidence";
 
-export const maxDuration=30;
+export const maxDuration=60;
 const requestSchema=z.object({id:z.string().uuid().optional(),messages:z.array(z.object({id:z.string(),role:z.enum(["user","assistant","system"]),parts:z.array(z.unknown())}).passthrough()).min(1)});
 type SupabaseResult={error:{code?:string;message:string}|null};
 class IntelligenceDataError extends Error{
@@ -58,6 +63,7 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  if(!question||question.length>4000)return Response.json({error:"A valid question is required"},{status:400});
  const questions=userQuestions(body.messages);
  const priorQuestions=questions.slice(0,-1);
+ const marketResearch=routeResearchIntent({question,priorQuestions});
  const [organisationResult,aliasResult]=await Promise.all([
   supabase.from("organisations").select("id,slug,name,sector,jurisdiction").eq("active",true),
   supabase.from("organisation_aliases").select("organisation_id,alias"),
@@ -72,7 +78,25 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const plan=planIntelligenceQuery(question,organisations);
  const domainAvailability=await loadDomainAvailability(supabase,plan.evidenceNeeds);
  const retrieval=await retrieveIntelligenceEvidence({db:supabase,question:contextualQuestion,plan,domainAvailability});
- const {references,evidence,gaps}=retrieval;
+ let references=[...retrieval.references];
+ let evidence=retrieval.evidence;
+ const gaps=[...retrieval.gaps];
+ const semrushConnectionState=getSemrushConnectionState();
+ const researchDomain=marketResearch.domain??(marketResearch.brand==="irish_life"?"irishlife.ie":marketResearch.brand==="unio"?"unio.ie":null);
+ const semrushResearch=marketResearch.useSemrush&&semrushConnectionState==="configured"
+  ? await researchWithSemrush({question, intent:marketResearch.intent, domain:researchDomain, market:marketResearch.market})
+  : null;
+ if(semrushResearch?.reference){
+  references=[...references,semrushResearch.reference];
+  const combinedCoverage=evidence.coverage==="insufficient"?"limited":evidence.coverage;
+  evidence={...makeEvidencePackage(references,evidence.checkedAt,combinedCoverage),freshness:"fresh_research"};
+ }
+ const semrushResearchStatus=marketResearch.useSemrush
+  ? semrushResearch?.message??(semrushConnectionState==="disabled"
+    ? "Live Semrush research is currently disabled; this answer uses the existing intelligence evidence only."
+    : "Semrush is not configured for this deployment; this answer uses the existing intelligence evidence only.")
+  : null;
+ if(semrushResearchStatus)gaps.push(semrushResearchStatus);
  const marketSignals=await retrieveIntelligenceSignals({db:supabase,question:contextualQuestion,plan,references});
  const graph=await retrieveKnowledgeGraph({db:supabase,organisationIds:plan.organisations.map(item=>item.id),references,onError:error=>logRouteError(error,requestId,"graph_retrieval")});
  const structuredKnowledge=await loadStructuredKnowledge(supabase,plan,references,marketSignals);
@@ -80,7 +104,13 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const structuredAnswer=buildStructuredAnswer(plan,structuredKnowledge,references);
  const title=question.length>72?`${question.slice(0,69)}…`:question;
  const conversationId=body.id??crypto.randomUUID();
- const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps,retrievalMetrics:retrieval.metrics,signalMetrics:{count:marketSignals.length,ids:marketSignals.map(signal=>signal.id)},graphMetrics:{entityCount:graph.entityIds.length,relationshipCount:graph.relationships.length,pathCount:graph.graphPaths.length,durationMs:graph.durationMs}},updated_at:new Date().toISOString()},{onConflict:"id"});
+ let previousPageDraft:PageDraft|null=null;
+ if(marketResearch.intent==="artifact_edit"&&body.id){
+  const previous=await supabase.from("conversation_messages").select("content").eq("conversation_id",conversationId).eq("user_id",user.id).eq("role","assistant").eq("intent","content_draft").order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if(previous.error)throw new IntelligenceDataError("conversation_messages.previous_draft",previous.error.code,previous.error.message);
+  previousPageDraft=extractPageDraft(previous.data?.content);
+ }
+ const conversationWrite=await supabase.from("conversations").upsert({id:conversationId,user_id:user.id,title,status:"active",context:{queryPlan:plan,marketResearchRoute:marketResearch,semrushResearch:semrushResearch?{status:semrushResearch.status,calls:semrushResearch.calls,referenceId:semrushResearch.reference?.id??null}:null,answerMode:structuredAnswer?.kind??"quick_answer",freshnessAssessment:retrieval.freshnessAssessment,domainAvailability,gaps,retrievalMetrics:retrieval.metrics,signalMetrics:{count:marketSignals.length,ids:marketSignals.map(signal=>signal.id)},graphMetrics:{entityCount:graph.entityIds.length,relationshipCount:graph.relationships.length,pathCount:graph.graphPaths.length,durationMs:graph.durationMs}},updated_at:new Date().toISOString()},{onConflict:"id"});
  assertSupabaseSuccess(conversationWrite,"conversations.upsert");
  const userMessageWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"user",content:{text:question},intent:plan.intent});
  assertSupabaseSuccess(userMessageWrite,"conversation_messages.insert_user");
@@ -88,22 +118,47 @@ async function handlePost(request:Request,requestId:string,startedAt:number){
  const diagnosticId=crypto.randomUUID();
  await persistRetrievalDiagnostic({id:diagnosticId,userId:user.id,conversationId,question,plan,subqueries:retrieval.subqueries,retrieval,retrievalDurationMs:retrieval.retrievalDurationMs,semanticStatus:retrieval.semanticStatus,config:retrieval.config,graph}).catch(error=>logRouteError(error,requestId,"retrieval_diagnostics_insert"));
  let completedAnalysis:IntelligenceAnalysis|null=null;
+ let completedPageDraft:PageDraft|null=null;
  let generationStartedAt=0;
  const stream=createUIMessageStream<IntelligenceUIMessage>({originalMessages:body.messages,execute:async({writer})=>{
   writer.write({type:"data-evidence",id:"answer-evidence",data:evidence});
   if(structuredAnswer)writer.write({type:"data-structuredAnswer",id:"answer-structure",data:structuredAnswer});
+  if(semrushResearchStatus)writer.write({type:"data-researchStatus",id:"market-research-status",data:{stage:"retrieving",label:semrushResearchStatus}});
   writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"analysing",label:references.length?`Analysing ${references.length} approved sources across ${evidence.passageCount||references.length} evidence passages…`:"Assessing evidence coverage…"}});
   generationStartedAt=Date.now();
   let analysis:IntelligenceAnalysis;
-  try{analysis=await synthesiseIntelligenceAnswer({question,conversationContext:priorQuestions,plan,evidence,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps})}
-  catch(error){logRouteError(error,requestId,"synthesis");analysis=fallbackAnalysis(evidence,{question,plan,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps})}
+  const isDraftRequest=marketResearchFlags.contentDrafts&&(marketResearch.intent==="draft_create"||(marketResearch.intent==="artifact_edit"&&Boolean(previousPageDraft)));
+  if(isDraftRequest&&marketResearch.brand){
+   writer.write({type:"data-researchStatus",id:"draft-status",data:{stage:"analysing",label:previousPageDraft?"Revising the selected page while keeping other sections intact…":"Preparing a brand-aligned page draft from the available evidence…"}});
+   try{
+    completedPageDraft=await createPageDraft({brand:marketResearch.brand,instruction:question,references,previousDraft:previousPageDraft});
+    if(semrushResearchStatus)completedPageDraft.implementationNotes.push(semrushResearchStatus);
+    writer.write({type:"data-contentDraft",id:`content-draft-${completedPageDraft.versionId}`,data:completedPageDraft});
+    const citedIds=[...new Set(completedPageDraft.sections.flatMap(section=>section.evidenceReferenceIds))];
+    analysis={headline:`Draft created: ${completedPageDraft.title}`,executiveSummary:`A complete ${completedPageDraft.brand=== "unio"?"Unio":"Irish Life"} page draft is ready as version ${previousPageDraft?"a revision":"1"}. It is editable, evidence references are linked where available, and it has not been approved or published.`,evidenceFindings:citedIds.length?[{title:"Evidence linked to draft claims",analysis:`The draft links supported claims to ${citedIds.length} retrieved reference${citedIds.length===1?"":"s"}. Review each citation and the editorial checks before approval.`,referenceIds:citedIds}]:[],strategicInterpretation:null,irishMarketImplication:null,counterEvidence:[],whatToWatch:[],confidence:evidence.confidence,confidenceReason:evidence.references.length?`Drafting used ${evidence.references.length} retrieved references; this is not approval of the copy.`:"No supporting references were retrieved; copy avoids unsupported product-specific claims and requires editorial verification.",followUpQuestions:["Shorten the hero while keeping the rest of the page unchanged.","Review the claims and evidence in this draft."],generatedBy:"model"};
+   }catch(error){logRouteError(error,requestId,"content_draft");analysis=fallbackAnalysis(evidence,{question,plan,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps:[...gaps,"The requested page draft could not be generated. No draft version was saved."]});}
+  }else if((marketResearch.intent==="draft_create"||marketResearch.intent==="artifact_edit")&&marketResearchFlags.contentDrafts&&!marketResearch.brand){
+   analysis=fallbackAnalysis(evidence,{question,plan,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps:[...gaps,"Choose Irish Life or Unio to generate a brand-specific draft; no brand was inferred."]});
+  }else{
+   try{analysis=await synthesiseIntelligenceAnswer({question,conversationContext:priorQuestions,plan,evidence,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps})}
+   catch(error){logRouteError(error,requestId,"synthesis");analysis=fallbackAnalysis(evidence,{question,plan,knowledge:structuredKnowledge,freshnessAssessment:retrieval.freshnessAssessment,gaps})}
+  }
   completedAnalysis=analysis;
   writer.write({type:"data-analysis",id:"answer-analysis",data:analysis});
   writer.write({type:"data-researchStatus",id:"analysis-status",data:{stage:"complete",label:"Analysis complete"}});
   writer.write({type:"text-start",id:"answer"});writer.write({type:"text-delta",id:"answer",delta:`${analysis.headline}\n\n${analysis.executiveSummary}`});writer.write({type:"text-end",id:"answer"});
- },onEnd:async({responseMessage})=>{try{const assistantWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"assistant",content:responseMessage,confidence:evidence.confidence,freshness:evidence.freshness,latency_ms:Date.now()-startedAt}).select("id").single();assertSupabaseSuccess(assistantWrite,"conversation_messages.insert_assistant");const stored=assistantWrite.data;if(stored&&references.length){const referenceWrite=await supabase.from("conversation_references").insert(references.map(item=>({conversation_id:conversationId,message_id:stored.id,source_id:item.sourceId,reference_snapshot:item,rank:item.rank,support_strength:item.supportStrength==="supporting"?"direct":item.supportStrength==="counter"?"corroborating":"contextual"})));assertSupabaseSuccess(referenceWrite,"conversation_references.insert")}if(completedAnalysis){await completeRetrievalDiagnostic({id:diagnosticId,analysis:completedAnalysis,retrieval,generationDurationMs:Date.now()-generationStartedAt})}}catch(error){logRouteError(error,requestId,"stream_on_end")}}});
+ },onEnd:async({responseMessage})=>{try{const assistantWrite=await supabase.from("conversation_messages").insert({conversation_id:conversationId,user_id:user.id,role:"assistant",intent:completedPageDraft?"content_draft":plan.intent,content:responseMessage,confidence:evidence.confidence,freshness:evidence.freshness,latency_ms:Date.now()-startedAt}).select("id").single();assertSupabaseSuccess(assistantWrite,"conversation_messages.insert_assistant");const stored=assistantWrite.data;const persistentReferences=references.filter(item=>item.persistent!==false);if(stored&&persistentReferences.length){const referenceWrite=await supabase.from("conversation_references").insert(persistentReferences.map(item=>({conversation_id:conversationId,message_id:stored.id,source_id:item.sourceId,reference_snapshot:item,rank:item.rank,support_strength:item.supportStrength==="supporting"?"direct":item.supportStrength==="counter"?"corroborating":"contextual"})));assertSupabaseSuccess(referenceWrite,"conversation_references.insert")}if(completedAnalysis){await completeRetrievalDiagnostic({id:diagnosticId,analysis:completedAnalysis,retrieval,generationDurationMs:Date.now()-generationStartedAt})}}catch(error){logRouteError(error,requestId,"stream_on_end")}}});
  console.log(JSON.stringify({level:"info",message:"Intelligence chat response started",route:"/api/intelligence/chat",requestId,conversationId,durationMs:Date.now()-startedAt,retrievalDurationMs:retrieval.retrievalDurationMs,graphRetrievalDurationMs:graph.durationMs,graphRelationshipCount:graph.relationships.length,referenceCount:references.length,evidenceItemCount:retrieval.metrics.selectedEvidenceCount,uniqueDocumentCount:retrieval.metrics.uniqueDocumentCount,uniqueDomainCount:retrieval.metrics.uniqueDomainCount,semanticStatus:retrieval.semanticStatus,confidence:evidence.confidence,coverage:evidence.coverage}));
  return createUIMessageStreamResponse({stream,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Request-Id":requestId}});
+}
+
+function extractPageDraft(content:unknown):PageDraft|null{
+ if(!content||typeof content!=="object"||Array.isArray(content))return null;
+ const parts=(content as {parts?:unknown}).parts;
+ if(!Array.isArray(parts))return null;
+ const part=parts.find(item=>item&&typeof item==="object"&&(item as {type?:unknown}).type==="data-contentDraft") as {data?:unknown}|undefined;
+ if(!part?.data||typeof part.data!=="object")return null;
+ return part.data as PageDraft;
 }
 
 async function loadDomainAvailability(supabase:Awaited<ReturnType<typeof createClient>>,evidenceNeeds:string[]){

@@ -22,7 +22,8 @@ describe("Irish Life login experience", () => {
     expect(page).toContain("Access is limited to approved users");
     expect(page).toContain("password-free sign-in instructions");
     expect(page).toContain('autoComplete="one-time-code"');
-    expect(page).toContain("six-digit code if shown");
+    expect(page).toContain('pattern="[0-9]{6,10}"');
+    expect(page).toContain("slice(0, 10)");
     expect(page).not.toContain('type="password"');
   });
 

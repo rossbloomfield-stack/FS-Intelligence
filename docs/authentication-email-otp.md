@@ -47,9 +47,8 @@ production demonstration.
 ## Verification checklist
 
 1. Request a code from an approved corporate address.
-2. Confirm the email contains a six-digit code and no sign-in link.
-3. Enter the code on `/intelligence/login`.
+2. Confirm the email contains a numeric code whose length matches the hosted Supabase **Email OTP length** setting (supported range: 6–10 digits) and no sign-in link. The current production email is issuing eight digits.
+3. Enter the complete code on `/intelligence/login`; the form accepts 6–10 digits and does not truncate valid codes.
 4. Confirm `/intelligence` loads with an authenticated session.
 5. Confirm an incorrect or reused code produces a clear error.
 6. Confirm an unapproved address cannot create an account or enter the app.
-

@@ -105,7 +105,7 @@ export default function Login() {
       setToken("");
       setState({
         kind: "success",
-        text: "Check your email. Enter the six-digit code if shown, or use the secure sign-in link.",
+        text: "Check your email and enter the security code to continue.",
       });
     } catch {
       setState({ kind: "error", text: "Secure sign-in is temporarily unavailable. Please try again." });
@@ -205,7 +205,7 @@ export default function Login() {
               </form>
             ) : (
               <form onSubmit={submitCode}>
-                <label htmlFor="security-code">Six-digit security code <span aria-hidden="true">*</span></label>
+                <label htmlFor="security-code">Security code <span aria-hidden="true">*</span></label>
                 <div className="irishlife-login-field irishlife-login-code-field">
                   <input
                     id="security-code"
@@ -213,17 +213,18 @@ export default function Login() {
                     autoFocus
                     autoComplete="one-time-code"
                     inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
+                    pattern="[0-9]{6,10}"
+                    minLength={6}
+                    maxLength={10}
                     type="text"
                     value={token}
-                    onChange={(event) => setToken(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={(event) => setToken(event.target.value.replace(/\D/g, "").slice(0, 10))}
                     aria-describedby="login-code-hint"
                   />
                 </div>
-                <p id="login-code-hint" className="irishlife-login-hint">If your email only contains a secure sign-in link, open that link instead.</p>
+                <p id="login-code-hint" className="irishlife-login-hint">Enter the numeric code from your email. Codes contain 6–10 digits.</p>
 
-                <button type="submit" disabled={pending || token.length !== 6}>
+                <button type="submit" disabled={pending || token.length < 6 || token.length > 10}>
                   <span>{pending ? "Checking…" : "Continue securely"}</span>
                   <span className="irishlife-login-button-icon" aria-hidden="true"><ArrowRight size={20} /></span>
                 </button>

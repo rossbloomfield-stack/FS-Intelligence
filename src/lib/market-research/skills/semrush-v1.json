@@ -1,0 +1,20 @@
+{
+  "id": "semrush-search-intelligence",
+  "version": "1.0.0",
+  "provider": "semrush-mcp",
+  "intents": [
+    "content_opportunities",
+    "competitor_visibility",
+    "website_review",
+    "backlink_research",
+    "paid_search_research",
+    "traffic_audience",
+    "ai_visibility"
+  ],
+  "requiredInputs": ["domain_or_explicit_market_target", "market", "language"],
+  "permittedTools": "Only discovered read-only Semrush MCP capabilities whose actual schemas have been validated.",
+  "evidenceRequirements": ["provider_tool", "validated_parameters", "database_or_market", "retrieved_at", "actual_columns", "raw_response_reference", "pagination_or_truncation"],
+  "freshness": { "capabilityTtlHours": 6, "organicResearchTtlHours": 24, "pageEvidenceTtlHours": 24 },
+  "budgetPolicy": { "maxToolCallsPerRequest": 4, "defaultRowsPerReport": 40, "maxPages": 2, "neverStartPaidAudit": true },
+  "fallback": "Use existing intelligence evidence or state the exact unsupported/unauthorized capability. Never fabricate provider data."
+}

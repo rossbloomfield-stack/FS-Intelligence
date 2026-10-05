@@ -21,6 +21,7 @@ export default async function Page() {
         <AdminCard title="Run progress" body="Agent and workflow status persists across retries and deployments." action="Open latest run" href="/intelligence/admin/runs/fixture" />
         <AdminCard title="Signal intelligence" body="Inspect extraction quality, provenance, unresolved entities and the controlled R3 backfill." action="Review signals" href="/intelligence/admin/signals" />
         <AdminCard title="Market graph" body="Inspect R4 source coverage, canonical entities, relationships and graph-processing health." action="Open graph diagnostics" href="/intelligence/admin/graph" />
+        <AdminCard title="Semrush research" body="Check app-owned provider configuration and discover available read-only research tools." action="Manage connection" href="/intelligence/admin/semrush" />
       </div>
       <IngestionOperations initialStatus={ingestionStatus} />
     </SectionPage>
