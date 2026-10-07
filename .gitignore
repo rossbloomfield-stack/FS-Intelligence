@@ -12,3 +12,4 @@ evals/results/*
 /.swc
 .vercel/
 .env*.local
+/supabase/.temp/
